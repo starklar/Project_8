@@ -1,7 +1,14 @@
+#connect az & login
+
+az login
+
 export SSL_EMAIL_ADDRESS="$(az account show --query user.name --output tsv)"
 export NETWORK_PREFIX="$(($RANDOM % 253 + 1))"
-export MY_RESOURCE_GROUP_NAME="webops_temp"
-export REGION="canadacentral"
+export MY_RESOURCE_GROUP_NAME="Group5_resource_group"
+export REGION="eastus2"
+export REGION_2="eastus2"
+export KEY_VAULT_NAME="GBCWebOpsKeyVault1"
+export BACKUP_KEY_VAULT_NAME="GBCWebOpsKeyVaultBackup"
 export MY_AKS_CLUSTER_NAME="webopsAKSCluster"
 export MY_PUBLIC_IP_NAME="webopsPublicIP"
 export MY_DNS_LABEL="webopsdnslabel"
@@ -11,19 +18,23 @@ export MY_SN_NAME="webopsSN"
 export MY_SN_PREFIX="10.$NETWORK_PREFIX.0.0/22"
 export MY_WP_ADMIN_PW="g8tr_p#dw9RDo"
 export MY_WP_ADMIN_USER="webops"
-export FQDN="${MY_DNS_LABEL}.${REGION}.cloudapp.azure.com"
+export FQDN="$MY_DNS_LABEL.export REGION.cloudapp.azure.com"
 export MY_MYSQL_DB_NAME="webopsdb"
 export MY_MYSQL_ADMIN_USERNAME="groupadmin"
 export MY_MYSQL_ADMIN_PW="admin96705"
 export MY_MYSQL_SN_NAME="myMySQLSN"
-export MY_MYSQL_HOSTNAME="$MY_MYSQL_DB_NAME.mysql.database.azure.com"
+export MY_MYSQL_HOSTNAME="export MY_MYSQL_DB_NAME.mysql.database.azure.com"
 export ACR_NAME="webopsacr"
-export $MY_NAMESPACE="webops-ns"
+export MY_NAMESPACE="webops-ns"
+export HSM_NAME="group5hsm"
+export GROUP_ID="$(az ad group show --group "Group5" --query "id" --output tsv)"
+export subscriptions_ID="$(az account show --query id --output tsv)"
 
 
-
+#create resource group
 az group create --name $MY_RESOURCE_GROUP_NAME --location $REGION
 
+#Set up Vnet
 az network vnet create \
     --resource-group $MY_RESOURCE_GROUP_NAME \
     --location $REGION \
@@ -32,12 +43,53 @@ az network vnet create \
     --subnet-name $MY_SN_NAME \
     --subnet-prefixes $MY_SN_PREFIX
 
+#Set up keyvault
+az keyvault create -g $MY_RESOURCE_GROUP_NAME --administrators $GROUP_ID -n $KEY_VAULT_NAME --location $REGION \
+   --enable-rbac-authorization false --retention-days 7
+
+#Assign admin role to group
+az role assignment create --assignee-object-id $GROUP_ID \
+  --role "Key Vault Administrator" \
+  --scope "subscriptions/$subscriptions_ID/resourceGroups/Group5_resource_group/providers/Microsoft.KeyVault/vaults/$KEY_VAULT_NAME"
+
+#Create key in keyvault
+export keyIdentifier=$(az keyvault key create --name Group5Key -p software \
+    --vault-name $KEY_VAULT_NAME --query key.kid --output tsv)
+
+# create identity and save its principalId
+export identityPrincipalId=$(az identity create -g $MY_RESOURCE_GROUP_NAME --name group5_identity \
+  --location $REGION --query principalId --output tsv)
+
+
+# add testIdentity as an access policy with key permissions 'Wrap Key', 'Unwrap Key', 'Get' and 'List' inside testVault
+az keyvault set-policy -g $MY_RESOURCE_GROUP_NAME \
+  -n $KEY_VAULT_NAME \
+  --object-id $identityPrincipalId \
+  --key-permissions wrapKey unwrapKey get list
+
+# create backup keyvault
+az keyvault create -g $MY_RESOURCE_GROUP_NAME -n $BACKUP_KEY_VAULT_NAME --location $REGION \
+  --enable-rbac-authorization false 
+
+# create backup key in backup keyvault
+$backupKeyIdentifier=az keyvault key create --name Group5Keybackup -p software \
+  --vault-name $BACKUP_KEY_VAULT_NAME --query key.kid -o json
+
+# create backup identity and save its principalId
+$backupIdentityPrincipalId=az identity create -g $MY_RESOURCE_GROUP_NAME --name group5_identity_backup \
+  --location $REGION --query principalId -o json
+
+# add testBackupIdentity as an access policy with key permissions 'Wrap Key', 'Unwrap Key', 'Get' and 'List' inside testBackupVault
+az keyvault set-policy -g $MY_RESOURCE_GROUP_NAME -n $BACKUP_KEY_VAULT_NAME \
+  --object-id $backupIdentityPrincipalId --key-permissions wrapKey unwrapKey get list
+
+
 az mysql flexible-server create \
     --admin-password $MY_MYSQL_ADMIN_PW \
     --admin-user $MY_MYSQL_ADMIN_USERNAME \
     --auto-scale-iops Disabled \
     --high-availability Disabled \
-    --iops 500 \
+    --iops 360 \
     --location $REGION \
     --name $MY_MYSQL_DB_NAME \
     --database-name wordpress \
@@ -46,6 +98,8 @@ az mysql flexible-server create \
     --storage-auto-grow Disabled \
     --storage-size 20 \
     --subnet $MY_MYSQL_SN_NAME \
+    --key $keyIdentifier \
+    --identity group5_identity \
     --private-dns-zone $MY_DNS_LABEL.private.mysql.database.azure.com \
     --tier Burstable \
     --version 8.0.21 \
