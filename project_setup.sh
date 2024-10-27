@@ -7,8 +7,9 @@ export NETWORK_PREFIX="$(($RANDOM % 253 + 1))"
 export MY_RESOURCE_GROUP_NAME="Group5_resource_group"
 export REGION="eastus2"
 export REGION_2="eastus2"
-export KEY_VAULT_NAME="GBCWebOpsKeyVault1"
-export BACKUP_KEY_VAULT_NAME="GBCWebOpsKeyVaultBackup"
+export DB_KEY_VAULT="WebOpsDBKeyVault"
+export BACKUP_DB_KEY_VAULT="WebOpsDBKeyVaultBackup"
+export K8s_KEY_VAULT="WebOpsk8sKeyVault"
 export MY_AKS_CLUSTER_NAME="webopsAKSCluster"
 export MY_PUBLIC_IP_NAME="webopsPublicIP"
 export MY_DNS_LABEL="webopsdnslabel"
@@ -44,17 +45,17 @@ az network vnet create \
     --subnet-prefixes $MY_SN_PREFIX
 
 #Set up keyvault
-az keyvault create -g $MY_RESOURCE_GROUP_NAME --administrators $GROUP_ID -n $KEY_VAULT_NAME --location $REGION \
+az keyvault create -g $MY_RESOURCE_GROUP_NAME --administrators $GROUP_ID -n $DB_KEY_VAULT --location $REGION \
    --enable-rbac-authorization false --retention-days 7
 
 #Assign admin role to group
 az role assignment create --assignee-object-id $GROUP_ID \
   --role "Key Vault Administrator" \
-  --scope "subscriptions/$subscriptions_ID/resourceGroups/Group5_resource_group/providers/Microsoft.KeyVault/vaults/$KEY_VAULT_NAME"
+  --scope "subscriptions/$subscriptions_ID/resourceGroups/Group5_resource_group/providers/Microsoft.KeyVault/vaults/$DB_KEY_VAULT"
 
 #Create key in keyvault
 export keyIdentifier=$(az keyvault key create --name Group5Key -p software \
-    --vault-name $KEY_VAULT_NAME --query key.kid --output tsv)
+    --vault-name $DB_KEY_VAULT --query key.kid --output tsv)
 
 # create identity and save its principalId
 export identityPrincipalId=$(az identity create -g $MY_RESOURCE_GROUP_NAME --name group5_identity \
@@ -63,24 +64,24 @@ export identityPrincipalId=$(az identity create -g $MY_RESOURCE_GROUP_NAME --nam
 
 # add testIdentity as an access policy with key permissions 'Wrap Key', 'Unwrap Key', 'Get' and 'List' inside testVault
 az keyvault set-policy -g $MY_RESOURCE_GROUP_NAME \
-  -n $KEY_VAULT_NAME \
+  -n $DB_KEY_VAULT \
   --object-id $identityPrincipalId \
   --key-permissions wrapKey unwrapKey get list
 
 # create backup keyvault
-az keyvault create -g $MY_RESOURCE_GROUP_NAME -n $BACKUP_KEY_VAULT_NAME --location $REGION \
+az keyvault create -g $MY_RESOURCE_GROUP_NAME -n $BACKUP_DB_KEY_VAULT --location $REGION \
   --enable-rbac-authorization false 
 
 # create backup key in backup keyvault
 $backupKeyIdentifier=az keyvault key create --name Group5Keybackup -p software \
-  --vault-name $BACKUP_KEY_VAULT_NAME --query key.kid -o json
+  --vault-name $BACKUP_DB_KEY_VAULT --query key.kid -o json
 
 # create backup identity and save its principalId
 $backupIdentityPrincipalId=az identity create -g $MY_RESOURCE_GROUP_NAME --name group5_identity_backup \
   --location $REGION --query principalId -o json
 
 # add testBackupIdentity as an access policy with key permissions 'Wrap Key', 'Unwrap Key', 'Get' and 'List' inside testBackupVault
-az keyvault set-policy -g $MY_RESOURCE_GROUP_NAME -n $BACKUP_KEY_VAULT_NAME \
+az keyvault set-policy -g $MY_RESOURCE_GROUP_NAME -n $BACKUP_DB_KEY_VAULT \
   --object-id $backupIdentityPrincipalId --key-permissions wrapKey unwrapKey get list
 
 
@@ -114,6 +115,7 @@ az acr import --name $ACR_NAME --source docker.io/djhlee5/project8:latest --imag
 
 export MY_SN_ID=$(az network vnet subnet list --resource-group $MY_RESOURCE_GROUP_NAME --vnet-name $MY_VNET_NAME --query "[0].id" --output tsv)
 
+#create aks cluster
 az aks create \
     --resource-group $MY_RESOURCE_GROUP_NAME \
     --name $MY_AKS_CLUSTER_NAME \
@@ -131,8 +133,29 @@ az aks create \
     --service-cidr 10.255.0.0/24 \
     --dns-service-ip 10.255.0.10 \
     --zones 1 2 3 \
+    --enable-addons azure-keyvault-secrets-provider \
     --generate-ssh-keys \
     --attach-acr $ACR_NAME
+  
+  #get AKS cluster credenials
+  az aks get-credentials --name $MY_AKS_CLUSTER_NAME --resource-group $MY_RESOURCE_GROUP_NAME
+
+  # verify the installation is finished
+  kubectl get pods -n kube-system -l 'app in (secrets-store-csi-driver,secrets-store-provider-azure)'
+
+  #Create K8s keyvault
+  az keyvault create -g $MY_RESOURCE_GROUP_NAME --administrators $GROUP_ID -n $K8s_KEY_VAULT --location $REGION \
+  --enable-rbac-authorization false --retention-days 7
+
+  az keyvault secret set --vault-name $K8s_KEY_VAULT --name AKS_cluster_secret --value AKS_example_secret
+
+  az aks connection create keyvault --connection <connection-name> \
+  --resource-group $MY_RESOURCE_GROUP_NAME \
+  --name $MY_AKS_CLUSTER_NAME \
+  --target-resource-group $MY_RESOURCE_GROUP_NAME \
+  --vault $K8s_KEY_VAULT \
+  --enable-csi \
+  --client-type none
 
 echo "apiVersion: apps/v1
 kind: Deployment
