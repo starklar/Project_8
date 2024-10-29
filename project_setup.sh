@@ -7,9 +7,9 @@ export NETWORK_PREFIX="$(($RANDOM % 253 + 1))"
 export MY_RESOURCE_GROUP_NAME="Group5_resource_group" 
 export REGION="canadacentral"
 export REGION_2="eastus"
-export DB_KEY_VAULT="WebOpsDBKeyVaultTest4" #need to change
+export DB_KEY_VAULT="WebOpsDBKeyVaultTest7" #need to change
 #export BACKUP_DB_KEY_VAULT="WebOpsDBKeyVaultBackup"
-export K8s_KEY_VAULT="GBCWebOpsKeyVault2"
+export K8s_KEY_VAULT="WebOpsK8sKeyVault0"
 export MY_AKS_CLUSTER_NAME="webopsAKSCluster"
 export MY_PUBLIC_IP_NAME="webopsPublicIP"
 export MY_DNS_LABEL="webopsdnslabel"
@@ -65,27 +65,6 @@ az keyvault set-policy -g $MY_RESOURCE_GROUP_NAME \
   --object-id $identityPrincipalId \
   --key-permissions wrapKey unwrapKey get list
 
-
-
-###############################To be determined whether the key is necessary and require geo-redundant backup
-# create backup keyvault
-az keyvault create -g $MY_RESOURCE_GROUP_NAME -n $BACKUP_DB_KEY_VAULT --location $REGION \
-  --enable-rbac-authorization false 
-
-# create backup key in backup keyvault
-$backupKeyIdentifier=az keyvault key create --name Group5Keybackup -p software \
-  --vault-name $BACKUP_DB_KEY_VAULT --query key.kid -o json
-
-# create backup identity and save its principalId
-$backupIdentityPrincipalId=az identity create -g $MY_RESOURCE_GROUP_NAME --name group5_identity_backup \
-  --location $REGION --query principalId -o json
-
-# add testBackupIdentity as an access policy with key permissions 'Wrap Key', 'Unwrap Key', 'Get' and 'List' inside testBackupVault
-az keyvault set-policy -g $MY_RESOURCE_GROUP_NAME -n $BACKUP_DB_KEY_VAULT \
-  --object-id $backupIdentityPrincipalId --key-permissions wrapKey unwrapKey get list
-----------------------------------------
-
-
 # create mysql server
 az mysql flexible-server create \
     --admin-password $MY_MYSQL_ADMIN_PW \
@@ -117,6 +96,7 @@ az acr import --name $ACR_NAME --source docker.io/djhlee5/project8:latest --imag
 
 export MY_SN_ID="$(az network vnet subnet list --resource-group $MY_RESOURCE_GROUP_NAME --vnet-name $MY_VNET_NAME --query "[0].id" --output tsv)"
 
+export MSYS_NO_PATHCONV=1
 #create aks cluster
 az aks create \
     --resource-group $MY_RESOURCE_GROUP_NAME \
@@ -137,7 +117,8 @@ az aks create \
     --zones 1 2 3 \
     --enable-addons azure-keyvault-secrets-provider \
     --generate-ssh-keys \
-    --attach-acr $ACR_NAME
+    --attach-acr $ACR_NAME \
+    --enable-managed-identity
   
   #get AKS cluster credenials
   az aks get-credentials --name $MY_AKS_CLUSTER_NAME --resource-group $MY_RESOURCE_GROUP_NAME
@@ -147,23 +128,41 @@ az aks create \
 
   #Create K8s keyvault
   az keyvault create -g $MY_RESOURCE_GROUP_NAME --administrators $GROUP_ID -n $K8s_KEY_VAULT --location $REGION \
-  --enable-rbac-authorization
+  --enable-rbac-authorization false
 
-  az role assignment create --assignee-object-id $GROUP_ID \
-  --role "Key Vault Administrator" \
+  #get managed identity id from aks cluster
+  export aks_prinipal_id="$(az identity list -g 'MC_Group5_resource_group_webopsAKSCluster_canadacentral' --query [0].principalId --output tsv)"
+
+  #set the key vault certificate officer to k8s cluster managed identity
+  az role assignment create --assignee-object-id $aks_prinipal_id \
+  --role "Key Vault Certificates Officer" \
   --scope "subscriptions/$subscriptions_ID/resourceGroups/Group5_resource_group/providers/Microsoft.KeyVault/vaults/$K8s_KEY_VAULT" 
-
+  
+  #create the secret for k8s cluster
   az keyvault secret set --vault-name $K8s_KEY_VAULT --name AKSClusterSecret --value AKS_sample_secret
 
 
-##stuck at connection
-  az aks connection create keyvault --connection keyvault_aks \
-  --resource-group $MY_RESOURCE_GROUP_NAME \
-  --name $MY_AKS_CLUSTER_NAME \
-  --target-resource-group $MY_RESOURCE_GROUP_NAME \
-  --vault $K8s_KEY_VAULT \
-  --enable-csi \
-  --client-type none
+  #create the access policy for connecting keyvault and k8s managed identiity
+  az keyvault set-policy -g $MY_RESOURCE_GROUP_NAME \
+  -n $K8s_KEY_VAULT \
+  --object-id $aks_prinipal_id \
+  --secret-permissions backup delete get list recover restore set
+
+  #get aks resource group name
+  export aks_rg_name="$(az group show --name "MC_Group5_resource_group_webopsAKSCluster_canadacentral" --query name --output tsv)"
+
+  # test the key is enable and connected to aks cluster
+  # git clone https://github.com/Azure-Samples/serviceconnector-aks-samples.git
+  # cd serviceconnector-aks-samples/azure-keyvault-csi-provider
+  # Replace <AZURE_KEYVAULT_NAME> with the name of the key vault you created and connected.
+  # Replace <AZURE_KEYVAULT_TENANTID> with the tenant ID of the key vault.
+  # Replace <AZURE_KEYVAULT_CLIENTID> with identity client ID of the azureKeyvaultSecretsProvider addon.
+  # Replace <KEYVAULT_SECRET_NAME> with the key vault secret you created. For example, ExampleSecret.
+  # kubectl apply -f secret_provider_class.yaml
+  # kubectl apply -f pod.yaml
+  # kubectl get pod/sc-demo-keyvault-csi
+  # kubectl exec sc-demo-keyvault-csi -- ls /mnt/secrets-store/
+  # kubectl exec sc-demo-keyvault-csi -- cat /mnt/secrets-store/AKSClusterSecret #fetch the data
 
 echo "apiVersion: apps/v1
 kind: Deployment
@@ -207,4 +206,3 @@ helm upgrade --install --cleanup-on-fail --atomic ingress-nginx ingress-nginx/in
         --set controller.service.loadBalancerIP=$MY_STATIC_IP \
         --set controller.service.annotations."service\.beta\.kubernetes\.io/azure-load-balancer-health-probe-request-path"=/healthz \
         --wait --timeout 10m0s
-
