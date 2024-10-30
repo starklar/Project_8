@@ -48,6 +48,7 @@ Replace "AZURE_KEYVAULT_CLIENTID" with identity client ID of the azureKeyvaultSe
 
 Replace "KEYVAULT_SECRET_NAME" with the key vault secret you created.
 
+Then execute the following kubectl to create the pod for testing
 ```bash
   kubectl apply -f secret_provider_class.yaml
   kubectl apply -f pod.yaml
