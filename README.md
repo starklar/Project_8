@@ -18,7 +18,8 @@ change directory into serviceconnector-aks-samples/azure-keyvault-csi-provider
 cd serviceconnector-aks-samples/azure-keyvault-csi-provider
 ```
 target file to be modified: secret_provider_class.yaml
-```json
+```yaml
+{
 apiVersion: secrets-store.csi.x-k8s.io/v1
 kind: SecretProviderClass
 metadata:
@@ -36,10 +37,15 @@ spec:
           objectName: <KEYVAULT_SECRET_NAME>            # keyvault secret name
           objectType: secret
     tenantId: <AZURE_KEYVAULT_TENANTID>                 # The tenant ID of the key vault
+}
 ```
+
 Replace "AZURE_KEYVAULT_NAME" with the name of the key vault you created and connected.
+
 Replace "AZURE_KEYVAULT_TENANTID" with The directory ID of the aks key vault, which is showing in the overview of your key vault.
+
 Replace "AZURE_KEYVAULT_CLIENTID" with identity client ID of the azureKeyvaultSecretsProvider addon, you can find it aks keyvault managed identity which created by the system
+
 Replace "KEYVAULT_SECRET_NAME" with the key vault secret you created.
 
 ```bash
