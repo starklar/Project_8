@@ -7,9 +7,9 @@ export NETWORK_PREFIX="$(($RANDOM % 253 + 1))"
 export MY_RESOURCE_GROUP_NAME="Group5_resource_group" 
 export REGION="canadacentral"
 export REGION_2="eastus"
-export DB_KEY_VAULT="WebOpsDBKeyVaultTest7" #need to change
+export DB_KEY_VAULT="WebOpsDBKeyVaultTest8" #need to change
 #export BACKUP_DB_KEY_VAULT="WebOpsDBKeyVaultBackup"
-export K8s_KEY_VAULT="WebOpsK8sKeyVault0"
+export K8s_KEY_VAULT="WebOpsK8sKeyVault1"
 export MY_AKS_CLUSTER_NAME="webopsAKSCluster"
 export MY_PUBLIC_IP_NAME="webopsPublicIP"
 export MY_DNS_LABEL="webopsdnslabel"
@@ -31,7 +31,6 @@ export HSM_NAME="group5hsm"
 export GROUP_ID="$(az ad group show --group "Group5" --query "id" --output tsv)"
 export subscriptions_ID="$(az account show --query id --output tsv)"
 
-
 #create resource group
 az group create --name $MY_RESOURCE_GROUP_NAME --location $REGION
 
@@ -51,7 +50,7 @@ az keyvault create -g $MY_RESOURCE_GROUP_NAME --administrators $GROUP_ID -n $DB_
 #Assign admin role to group
 az role assignment create --assignee-object-id $GROUP_ID \
   --role "Key Vault Administrator" \
-  --scope "subscriptions/$subscriptions_ID/resourceGroups/Group5_resource_group/providers/Microsoft.KeyVault/vaults/$DB_KEY_VAULT" 
+  --scope "subscriptions/$subscriptions_ID/resourceGroups/$MY_RESOURCE_GROUP_NAME/providers/Microsoft.KeyVault/vaults/$DB_KEY_VAULT" 
 
 #Create key in keyvault
 export keyIdentifier=$(az keyvault key create --name Group5DBKey -p software --vault-name $DB_KEY_VAULT --query key.kid  --output tsv)
@@ -131,12 +130,12 @@ az aks create \
   --enable-rbac-authorization false
 
   #get managed identity id from aks cluster
-  export aks_prinipal_id="$(az identity list -g 'MC_Group5_resource_group_webopsAKSCluster_canadacentral' --query [0].principalId --output tsv)"
+  export aks_prinipal_id="$(az identity list -g MC_${MY_RESOURCE_GROUP_NAME}_${MY_AKS_CLUSTER_NAME}_${REGION} --query [0].principalId --output tsv)"
 
   #set the key vault certificate officer to k8s cluster managed identity
   az role assignment create --assignee-object-id $aks_prinipal_id \
   --role "Key Vault Certificates Officer" \
-  --scope "subscriptions/$subscriptions_ID/resourceGroups/Group5_resource_group/providers/Microsoft.KeyVault/vaults/$K8s_KEY_VAULT" 
+  --scope "subscriptions/$subscriptions_ID/resourceGroups/$MY_RESOURCE_GROUP_NAME/providers/Microsoft.KeyVault/vaults/$K8s_KEY_VAULT" 
   
   #create the secret for k8s cluster
   az keyvault secret set --vault-name $K8s_KEY_VAULT --name AKSClusterSecret --value AKS_sample_secret
@@ -148,14 +147,12 @@ az aks create \
   --object-id $aks_prinipal_id \
   --secret-permissions backup delete get list recover restore set
 
-  #get aks resource group name
-  export aks_rg_name="$(az group show --name "MC_Group5_resource_group_webopsAKSCluster_canadacentral" --query name --output tsv)"
-
   # test the key is enable and connected to aks cluster
   # git clone https://github.com/Azure-Samples/serviceconnector-aks-samples.git
   # cd serviceconnector-aks-samples/azure-keyvault-csi-provider
+  # modify file: secret_provider_class.yaml
   # Replace <AZURE_KEYVAULT_NAME> with the name of the key vault you created and connected.
-  # Replace <AZURE_KEYVAULT_TENANTID> with the tenant ID of the key vault.
+  # Replace <AZURE_KEYVAULT_TENANTID> with The directory ID of the aks key vault.
   # Replace <AZURE_KEYVAULT_CLIENTID> with identity client ID of the azureKeyvaultSecretsProvider addon.
   # Replace <KEYVAULT_SECRET_NAME> with the key vault secret you created. For example, ExampleSecret.
   # kubectl apply -f secret_provider_class.yaml
