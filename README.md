@@ -9,7 +9,13 @@ Try to keep variables at the top of the file. And also please make new ones as t
 
 
 ## How to test the key vault connection?
+Define the keyvault name in K8s_KEY_VAULT
+```bash
+export K8s_KEY_VAULT="keyvaultname"
+```
+
 Clone the connection test deck from ms azure
+
 ```bash
 git clone https://github.com/Azure-Samples/serviceconnector-aks-samples.git
 ```
