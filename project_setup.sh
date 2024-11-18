@@ -1,5 +1,3 @@
-#!/bin/bash
-
 #connect az & login, comment out the below line to run script as a bash file on Azure Cloud Shell
 az login
 
