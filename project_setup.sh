@@ -1,3 +1,8 @@
+#!/bin/bash
+
+# NOTE: If you see: bash: ./project_setup.sh: /bin/bash^M: bad interpreter: No such file or directory
+# run: sed -i -e 's/\r$//' project_setup.sh
+
 #connect az & login, comment out the below line to run script as a bash file on Azure Cloud Shell
 az login
 
@@ -46,7 +51,19 @@ export SUBSCRIPTIONS_ID="$(az account show --query id --output tsv)"
 export MSYS_NO_PATHCONV=1
 export ACR_PRIVATE_ENDPOINT_NAME="acrConnection"
 export ACR_PRIVATE_ENDPOINT_GROUP_ID="registry"
+<<<<<<< HEAD
 export VM_NAME="Webops_VM"
+=======
+export ORIGIN_GROUP_NAME="webopsOriginGroup"
+export PRIMARY_ORIGIN_NAME="primaryOrigin"
+export ROUTE_NAME="webOpsMainRoute"
+export WAF_NAME="frontDoorWAF"
+export FRONT_DOOR_NAME="webopsFrontDoor"
+export FRONT_DOOR_ENDPOINT_NAME="webopsFrontEnd"
+export FRONT_DOOR_SECURITY_POLICY_NAME="fd-sec-po"
+export FRONT_DOOR_RULE_SET_NAME="frontDoorRuleSet"
+
+>>>>>>> bd2b136fa15e59d7b4b838e27e40e0d8b17b6ea5
 export DOCKER_HUB_IMAGE_NAME="unaveed1122/webopsimageforwp:v1"
 export vm_admin_pw="webops_vm_1234"
 
@@ -172,7 +189,7 @@ az mysql flexible-server create \
     #--subnet $DB_SUBNET_NAME \
   
 
-runtime="10 minute"; endtime=$(date -ud "$runtime" +%s); while [[ $(date -u +%s) -le $endtime ]]; do STATUS=$(az mysql flexible-server show -g $MY_RESOURCE_GROUP_NAME -n $MY_MYSQL_DB_NAME --query state -o tsv); echo $STATUS; if [ "$STATUS" = 'Ready' ]; then break; else sleep 10; fi; done
+runtime="10 minute"; endtime=$(date -ud "$runtime" +%s); while [[ $(date -u +%s) -le $endtime ]]; do STATUS=$(az mysql flexible-server show -g $MY_RESOURCE_GROUP_NAME -n $MY_MYSQL_SERVER_NAME --query state -o tsv); echo $STATUS; if [ "$STATUS" = 'Ready' ]; then break; else sleep 10; fi; done
 
 
 #create private endpoint for az mysql
@@ -261,6 +278,10 @@ az aks get-credentials --name $MY_AKS_CLUSTER_NAME --resource-group $MY_RESOURCE
 # verify the installation is finished
 kubectl get pods -n kube-system -l 'app in (secrets-store-csi-driver,secrets-store-provider-azure)'
 
+#Create K8s keyvault
+az keyvault create -g $MY_RESOURCE_GROUP_NAME --administrators $GROUP_ID -n $K8s_KEY_VAULT --location $REGION \
+  --enable-rbac-authorization false
+  
 # Create Kubernetes Secret for MySQL Credentials
 kubectl create secret generic mysql-secret \
   --from-literal=username=$MY_MYSQL_ADMIN_USERNAME \
@@ -269,6 +290,7 @@ kubectl create secret generic mysql-secret \
 
 # ERROR: The current registry SKU does not support private endpoint connection. Please upgrade your registry to premium SKU
 # Create ACR Private Endpoint
+<<<<<<< HEAD
 az network private-endpoint create \
   -n $ACR_PRIVATE_ENDPOINT_NAME \
   -g $MY_RESOURCE_GROUP_NAME \
@@ -278,24 +300,34 @@ az network private-endpoint create \
   --group-id $ACR_PRIVATE_ENDPOINT_GROUP_ID \
   --private-connection-resource-id "/subscriptions/$SUBSCRIPTIONS_ID/resourceGroups/$MY_RESOURCE_GROUP_NAME/providers/Microsoft.ContainerRegistry/registries/$ACR_NAME" \
   --location $REGION
+=======
+#az network private-endpoint create \
+#  -n $ACR_PRIVATE_ENDPOINT_NAME \
+#  -g $MY_RESOURCE_GROUP_NAME \
+#  --vnet-name $MY_VNET_NAME \
+#  --subnet $ACR_SUBNET_NAME \
+#  --connection-name $ACR_PRIVATE_ENDPOINT_NAME \
+#  --group-id $ACR_PRIVATE_ENDPOINT_GROUP_ID \
+#  --private-connection-resource-id "/subscriptions/$SUBSCRIPTIONS_ID/resourceGroups/$MY_RESOURCE_GROUP_NAME/providers/Microsoft.ContainerRegistry/registries/$ACR_NAME"
+>>>>>>> bd2b136fa15e59d7b4b838e27e40e0d8b17b6ea5
 
 #get managed identity id from aks cluster
 export aks_prinipal_id="$(az identity list -g MC_${MY_RESOURCE_GROUP_NAME}_${MY_AKS_CLUSTER_NAME}_${REGION} --query [0].principalId --output tsv)"
 
 #set the key vault certificate officer to k8s cluster managed identity
 az role assignment create --assignee-object-id $aks_prinipal_id \
---role "Key Vault Certificates Officer" \
---scope "subscriptions/$SUBSCRIPTIONS_ID/resourceGroups/$MY_RESOURCE_GROUP_NAME/providers/Microsoft.KeyVault/vaults/$DB_KEY_VAULT" 
+  --role "Key Vault Certificates Officer" \
+  --scope "subscriptions/$subscriptions_ID/resourceGroups/$MY_RESOURCE_GROUP_NAME/providers/Microsoft.KeyVault/vaults/$K8s_KEY_VAULT" 
 
 #create the secret for k8s cluster
-az keyvault secret set --vault-name $DB_KEY_VAULT --name AKSClusterSecret --value AKS_sample_secret
+az keyvault secret set --vault-name $K8s_KEY_VAULT --name AKSClusterSecret --value AKS_sample_secret
 
 
 #create the access policy for connecting keyvault and k8s managed identiity
 az keyvault set-policy -g $MY_RESOURCE_GROUP_NAME \
--n $DB_KEY_VAULT \
---object-id $aks_prinipal_id \
---secret-permissions backup delete get list recover restore set
+  -n $K8s_KEY_VAULT \
+  --object-id $aks_prinipal_id \
+  --secret-permissions backup delete get list recover restore set
 
 # test the key is enable and connected to aks cluster
 # git clone https://github.com/Azure-Samples/serviceconnector-aks-samples.git
@@ -388,5 +420,154 @@ helm upgrade --install --cleanup-on-fail --atomic ingress-nginx ingress-nginx/in
         --set controller.service.annotations."service\.beta\.kubernetes\.io/azure-load-balancer-health-probe-request-path"=/healthz \
         --wait --timeout 10m0s
 
+helm install quickstart ingress-nginx/ingress-nginx
+
 # Get Service Info
 kubectl get service
+
+
+
+#Set up Front door, Standard version
+# Change sku to: Premium_AzureFrontDoor, for managed rules
+az afd profile create \
+    --profile-name $FRONT_DOOR_NAME \
+    --resource-group $MY_RESOURCE_GROUP_NAME \
+    --sku Standard_AzureFrontDoor
+
+
+
+
+# Create Front Door Endpoint
+az afd endpoint create \
+    --resource-group $MY_RESOURCE_GROUP_NAME \
+    --endpoint-name $FRONT_DOOR_ENDPOINT_NAME \
+    --profile-name $FRONT_DOOR_NAME \
+    --enabled-state Enabled
+
+
+#Create an origin group that defines the traffic and expected responses for our app
+az afd origin-group create \
+    --resource-group $MY_RESOURCE_GROUP_NAME \
+    --origin-group-name $ORIGIN_GROUP_NAME \
+    --profile-name $FRONT_DOOR_NAME \
+    --probe-request-type GET \
+    --probe-protocol Http \
+    --probe-interval-in-seconds 60 \
+    --probe-path / \
+    --sample-size 4 \
+    --successful-samples-required 3 \
+    --additional-latency-in-milliseconds 50
+
+
+# Create origins for each AKS
+export PRIMARY_ORIGIN_HOST_NAME=$(kubectl get service  | awk '$1=="akswordpress-service"{print $4}')
+
+az afd origin create \
+    --resource-group $MY_RESOURCE_GROUP_NAME \
+    --host-name $PRIMARY_ORIGIN_HOST_NAME \
+    --origin-host-header $PRIMARY_ORIGIN_HOST_NAME \
+    --profile-name $FRONT_DOOR_NAME \
+    --origin-group-name $ORIGIN_GROUP_NAME \
+    --origin-name $PRIMARY_ORIGIN_NAME \
+    --priority 1 \
+    --weight 1000 \
+    --enabled-state Enabled \
+    --http-port 80 \
+    --https-port 443
+
+
+# Create route to forwards requests from the endpoint to origin group.
+# TODO: Add " Https" to --supported-protocols once that's ready
+az afd route create \
+    --resource-group $MY_RESOURCE_GROUP_NAME \
+    --profile-name $FRONT_DOOR_NAME \
+    --endpoint-name $FRONT_DOOR_ENDPOINT_NAME \
+    --forwarding-protocol MatchRequest \
+    --route-name $ROUTE_NAME \
+    --origin-group $ORIGIN_GROUP_NAME \
+    --supported-protocols Http  \
+    --link-to-default-domain Enabled 
+
+# Create WAF for Front Door
+# Change sku to: Premium_AzureFrontDoor, for managed rules
+az network front-door waf-policy create \
+    --name $WAF_NAME \
+    --resource-group $MY_RESOURCE_GROUP_NAME \
+    --sku Standard_AzureFrontDoor \
+    --disabled false \
+    --mode Prevention
+
+# Apply WAF policy to the endpoint
+az afd security-policy create \
+    --resource-group $MY_RESOURCE_GROUP_NAME \
+    --profile-name $FRONT_DOOR_NAME \
+    --security-policy-name $FRONT_DOOR_SECURITY_POLICY_NAME \
+    --domains /subscriptions/$SUBSCRIPTIONS_ID/resourcegroups/$MY_RESOURCE_GROUP_NAME/providers/Microsoft.Cdn/profiles/$FRONT_DOOR_NAME/afdEndpoints/$FRONT_DOOR_ENDPOINT_NAME \
+    --waf-policy /subscriptions/$SUBSCRIPTIONS_ID/resourcegroups/$MY_RESOURCE_GROUP_NAME/providers/Microsoft.Network/frontdoorwebapplicationfirewallpolicies/$WAF_NAME
+
+
+# Create WAF custom rules
+# Block traffic from anywhere that isn't Canada
+az network front-door waf-policy rule create \
+    --policy-name $WAF_NAME \
+    --resource-group $MY_RESOURCE_GROUP_NAME \
+    --name BlockForeignCountriesRule \
+    --action Block \
+    --priority 500 \
+    --rule-type MatchRule \
+    --defer
+
+az network front-door waf-policy rule match-condition add \
+    --resource-group $MY_RESOURCE_GROUP_NAME \
+    --policy-name $WAF_NAME \
+    --name BlockForeignCountriesRule \
+    --match-variable RemoteAddr \
+    --operator GeoMatch \
+    --values CA \
+    --negate true
+
+# Block non-GET traffic
+az network front-door waf-policy rule create \
+    --policy-name $WAF_NAME \
+    --resource-group $MY_RESOURCE_GROUP_NAME \
+    --name BlockNonGET \
+    --action Block \
+    --priority 300 \
+    --rule-type MatchRule \
+    --defer
+
+az network front-door waf-policy rule match-condition add \
+    --resource-group $MY_RESOURCE_GROUP_NAME \
+    --policy-name $WAF_NAME \
+    --name BlockNonGET \
+    --match-variable RequestMethod \
+    --operator Equal \
+    --values GET \
+    --negate true
+
+
+# Rate Limit Uri
+az network front-door waf-policy rule create \
+    --policy-name $WAF_NAME \
+    --resource-group $MY_RESOURCE_GROUP_NAME \
+    --name RateLimitUri \
+    --action Block \
+    --priority 800 \
+    --rule-type RateLimitRule \
+    --rate-limit-duration 1 \
+    --rate-limit-threshold 100 \
+    --defer
+
+az network front-door waf-policy rule match-condition add \
+    --resource-group $MY_RESOURCE_GROUP_NAME \
+    --policy-name $WAF_NAME \
+    --name RateLimitUri \
+    --match-variable RemoteAddr \
+    --operator IPMatch \
+    --values 255.255.255.255/32 \
+    --negate true
+
+
+# Get hostname for Front Door endpoint
+az afd endpoint show --resource-group $MY_RESOURCE_GROUP_NAME --profile-name $FRONT_DOOR_NAME --endpoint-name $FRONT_DOOR_ENDPOINT_NAME
+
