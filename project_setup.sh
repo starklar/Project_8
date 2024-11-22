@@ -51,9 +51,7 @@ export SUBSCRIPTIONS_ID="$(az account show --query id --output tsv)"
 export MSYS_NO_PATHCONV=1
 export ACR_PRIVATE_ENDPOINT_NAME="acrConnection"
 export ACR_PRIVATE_ENDPOINT_GROUP_ID="registry"
-<<<<<<< HEAD
 export VM_NAME="Webops_VM"
-=======
 export ORIGIN_GROUP_NAME="webopsOriginGroup"
 export PRIMARY_ORIGIN_NAME="primaryOrigin"
 export ROUTE_NAME="webOpsMainRoute"
@@ -62,8 +60,6 @@ export FRONT_DOOR_NAME="webopsFrontDoor"
 export FRONT_DOOR_ENDPOINT_NAME="webopsFrontEnd"
 export FRONT_DOOR_SECURITY_POLICY_NAME="fd-sec-po"
 export FRONT_DOOR_RULE_SET_NAME="frontDoorRuleSet"
-
->>>>>>> bd2b136fa15e59d7b4b838e27e40e0d8b17b6ea5
 export DOCKER_HUB_IMAGE_NAME="unaveed1122/webopsimageforwp:v1"
 export vm_admin_pw="webops_vm_1234"
 
@@ -226,12 +222,6 @@ az network private-dns record-set a add-record --record-set-name dbserver \
     -g $MY_RESOURCE_GROUP_NAME \
     -a $private_ip
 
-
-
-
-
-
----------------------------------------------------------
 #TEMPORARY TURN OFF FOR NOW
 az mysql flexible-server parameter set \
   --name require_secure_transport \
@@ -290,17 +280,6 @@ kubectl create secret generic mysql-secret \
 
 # ERROR: The current registry SKU does not support private endpoint connection. Please upgrade your registry to premium SKU
 # Create ACR Private Endpoint
-<<<<<<< HEAD
-az network private-endpoint create \
-  -n $ACR_PRIVATE_ENDPOINT_NAME \
-  -g $MY_RESOURCE_GROUP_NAME \
-  --vnet-name $MY_VNET_NAME \
-  --subnet $ACR_SUBNET_NAME \
-  --connection-name $ACR_PRIVATE_ENDPOINT_NAME \
-  --group-id $ACR_PRIVATE_ENDPOINT_GROUP_ID \
-  --private-connection-resource-id "/subscriptions/$SUBSCRIPTIONS_ID/resourceGroups/$MY_RESOURCE_GROUP_NAME/providers/Microsoft.ContainerRegistry/registries/$ACR_NAME" \
-  --location $REGION
-=======
 #az network private-endpoint create \
 #  -n $ACR_PRIVATE_ENDPOINT_NAME \
 #  -g $MY_RESOURCE_GROUP_NAME \
