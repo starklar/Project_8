@@ -8,11 +8,10 @@ az login
 
 export SSL_EMAIL_ADDRESS="$(az account show --query user.name --output tsv)"
 export NETWORK_PREFIX="$(($RANDOM % 253 + 1))"
-export MY_RESOURCE_GROUP_NAME="Group5_resource_group_anthony" 
+export MY_RESOURCE_GROUP_NAME="Group5_resource_group" 
 export REGION="canadacentral"
 export REGION_2="eastus"
-export DB_KEY_VAULT="WebOpsDBKeyVaultTest$(($RANDOM % 10000 + 1))" #need to change
-#export BACKUP_DB_KEY_VAULT="WebOpsDBKeyVaultBackup"
+export DB_KEY_VAULT="WebOpsDBKeyVaultTest$(($RANDOM % 10000 + 1))"
 export MY_AKS_CLUSTER_NAME="webopsAKSCluster"
 export MY_PUBLIC_IP_NAME="webopsPublicIP"
 export MY_DNS_LABEL="webopsdnslabel"
@@ -62,6 +61,7 @@ export FRONT_DOOR_SECURITY_POLICY_NAME="fd-sec-po"
 export FRONT_DOOR_RULE_SET_NAME="frontDoorRuleSet"
 export DOCKER_HUB_IMAGE_NAME="unaveed1122/webopsimageforwp:v1"
 export vm_admin_pw="webops_vm_1234"
+export LOG_WORKSPACE_NAME="aksLogsWorkspace"
 
 #create resource group
 az group create --name $MY_RESOURCE_GROUP_NAME --location $REGION
@@ -83,17 +83,6 @@ az network vnet subnet create \
 # Create AKS Subnet-NSG
 az network nsg create --resource-group $MY_RESOURCE_GROUP_NAME --name $AKS_NSG_NAME --location $REGION
 
-# # Create Database Subnet
-# az network vnet subnet create \
-#   --name $DB_SUBNET_NAME \
-#   --resource-group $MY_RESOURCE_GROUP_NAME \
-#   --vnet-name $MY_VNET_NAME \
-#   --address-prefixes $DB_SUBNET_PREFIX \
-
-
-# # Create Database Subnet-NSG
-# az network nsg create --resource-group $MY_RESOURCE_GROUP_NAME --name $DB_NSG_NAME --location $REGION
-
 # Create Application Gateway Subnet
 az network vnet subnet create \
   --name $APP_GATEWAY_SUBNET_NAME \
@@ -114,16 +103,6 @@ az network vnet subnet create \
 
 # Create Private Endpoint Subnet-NSG:
 az network nsg create --resource-group $MY_RESOURCE_GROUP_NAME --name $PRIVATE_ENDPOINT_NSG_NAME --location $REGION
-
-# Create ACR Subnet (Optional-Will require ACR tier to be Premium)
-#az network vnet subnet create \
-#  --name $ACR_SUBNET_NAME \
-#  --resource-group $MY_RESOURCE_GROUP_NAME \
-#  --vnet-name $MY_VNET_NAME \
-#  --address-prefixes $ACR_SUBNET_PREFIX
-
-# Create ACR Subnet-NSG: (Optional)
-#az network nsg create --resource-group $MY_RESOURCE_GROUP_NAME --name $ACR_NSG_NAME --location $REGION
 
 
 
@@ -180,9 +159,6 @@ az mysql flexible-server create \
     --version 8.0.21 \
     --yes -o JSON  \
     --public-access $vm_puiblic_ip
-    #--private-dns-zone $MY_DNS_LABEL.private.mysql.database.azure.com \
-    #--vnet $MY_VNET_NAME \
-    #--subnet $DB_SUBNET_NAME \
   
 
 runtime="10 minute"; endtime=$(date -ud "$runtime" +%s); while [[ $(date -u +%s) -le $endtime ]]; do STATUS=$(az mysql flexible-server show -g $MY_RESOURCE_GROUP_NAME -n $MY_MYSQL_SERVER_NAME --query state -o tsv); echo $STATUS; if [ "$STATUS" = 'Ready' ]; then break; else sleep 10; fi; done
@@ -269,7 +245,7 @@ az aks get-credentials --name $MY_AKS_CLUSTER_NAME --resource-group $MY_RESOURCE
 kubectl get pods -n kube-system -l 'app in (secrets-store-csi-driver,secrets-store-provider-azure)'
 
 #Create K8s keyvault
-az keyvault create -g $MY_RESOURCE_GROUP_NAME --administrators $GROUP_ID -n $K8s_KEY_VAULT --location $REGION \
+az keyvault create -g $MY_RESOURCE_GROUP_NAME --administrators $GROUP_ID -n $DB_KEY_VAULT --location $REGION \
   --enable-rbac-authorization false
   
 # Create Kubernetes Secret for MySQL Credentials
@@ -278,33 +254,21 @@ kubectl create secret generic mysql-secret \
   --from-literal=password=$MY_MYSQL_ADMIN_PW
 
 
-# ERROR: The current registry SKU does not support private endpoint connection. Please upgrade your registry to premium SKU
-# Create ACR Private Endpoint
-#az network private-endpoint create \
-#  -n $ACR_PRIVATE_ENDPOINT_NAME \
-#  -g $MY_RESOURCE_GROUP_NAME \
-#  --vnet-name $MY_VNET_NAME \
-#  --subnet $ACR_SUBNET_NAME \
-#  --connection-name $ACR_PRIVATE_ENDPOINT_NAME \
-#  --group-id $ACR_PRIVATE_ENDPOINT_GROUP_ID \
-#  --private-connection-resource-id "/subscriptions/$SUBSCRIPTIONS_ID/resourceGroups/$MY_RESOURCE_GROUP_NAME/providers/Microsoft.ContainerRegistry/registries/$ACR_NAME"
->>>>>>> bd2b136fa15e59d7b4b838e27e40e0d8b17b6ea5
-
 #get managed identity id from aks cluster
 export aks_prinipal_id="$(az identity list -g MC_${MY_RESOURCE_GROUP_NAME}_${MY_AKS_CLUSTER_NAME}_${REGION} --query [0].principalId --output tsv)"
 
 #set the key vault certificate officer to k8s cluster managed identity
 az role assignment create --assignee-object-id $aks_prinipal_id \
   --role "Key Vault Certificates Officer" \
-  --scope "subscriptions/$subscriptions_ID/resourceGroups/$MY_RESOURCE_GROUP_NAME/providers/Microsoft.KeyVault/vaults/$K8s_KEY_VAULT" 
+  --scope "subscriptions/$SUBSCRIPTIONS_ID/resourceGroups/$MY_RESOURCE_GROUP_NAME/providers/Microsoft.KeyVault/vaults/$DB_KEY_VAULT" 
 
 #create the secret for k8s cluster
-az keyvault secret set --vault-name $K8s_KEY_VAULT --name AKSClusterSecret --value AKS_sample_secret
+az keyvault secret set --vault-name $DB_KEY_VAULT --name AKSClusterSecret --value AKS_sample_secret
 
 
 #create the access policy for connecting keyvault and k8s managed identiity
 az keyvault set-policy -g $MY_RESOURCE_GROUP_NAME \
-  -n $K8s_KEY_VAULT \
+  -n $DB_KEY_VAULT \
   --object-id $aks_prinipal_id \
   --secret-permissions backup delete get list recover restore set
 
@@ -550,3 +514,66 @@ az network front-door waf-policy rule match-condition add \
 # Get hostname for Front Door endpoint
 az afd endpoint show --resource-group $MY_RESOURCE_GROUP_NAME --profile-name $FRONT_DOOR_NAME --endpoint-name $FRONT_DOOR_ENDPOINT_NAME
 
+# Sleep for 3 minutes to let things for Front Door get set up.
+sleep 3m
+
+# Get hostname for Front Door endpoint
+az afd endpoint show --resource-group $MY_RESOURCE_GROUP_NAME --profile-name $FRONT_DOOR_NAME --endpoint-name $FRONT_DOOR_ENDPOINT_NAME
+
+
+
+# Create Log Analytics workspace
+az monitor log-analytics workspace create \
+  --resource-group $MY_RESOURCE_GROUP_NAME \
+  --workspace-name $LOG_WORKSPACE_NAME \
+  --location $REGION
+
+# 2. Get Log Analytics Workspace ID
+LOG_WORKSPACE_ID=$(az monitor log-analytics workspace show \
+  --resource-group $MY_RESOURCE_GROUP_NAME \
+  --workspace-name $LOG_WORKSPACE_NAME \
+  --query id -o tsv)
+
+# 3. Enable monitoring addon for AKS
+az aks enable-addons \
+  --addons monitoring \
+  --resource-group $MY_RESOURCE_GROUP_NAME \
+  --name $MY_AKS_CLUSTER_NAME \
+  --workspace-resource-id $LOG_WORKSPACE_ID
+
+# 4. Enable monitoring for MySQL Flexible Server (Replacing SQL Server step)
+MYSQL_RESOURCE_ID=$(az mysql flexible-server show \
+  --resource-group $MY_RESOURCE_GROUP_NAME \
+  --name $MY_MYSQL_SERVER_NAME \
+  --query id -o tsv)
+
+
+az monitor diagnostic-settings create \
+  --name MySQLLogs \
+  --resource $MYSQL_RESOURCE_ID \
+  --workspace $LOG_WORKSPACE_ID \
+  --logs '[{"category": "QueryStoreRuntimeStatistics", "enabled": true}, {"category": "Connections", "enabled": true}]'
+
+# 5. Enable Key Vault logging
+KEY_VAULT_RESOURCE_ID=$(az keyvault show \
+  --name $DB_KEY_VAULT \
+  --resource-group $MY_RESOURCE_GROUP_NAME \
+  --query id -o tsv)
+
+az monitor diagnostic-settings create \
+  --name "KeyVaultLogs" \
+  --resource $KEY_VAULT_RESOURCE_ID \
+  --workspace $LOG_WORKSPACE_ID \
+  --logs '[{"category": "AuditEvent", "enabled": true}]'
+
+# 6. Enable Front Door logging
+FRONT_DOOR_RESOURCE_ID=$(az cdn profile show \
+  --name $FRONT_DOOR_NAME \
+  --resource-group $MY_RESOURCE_GROUP_NAME \
+  --query id -o tsv)
+
+az monitor diagnostic-settings create \
+  --name "FrontDoorLogs" \
+  --resource $FRONT_DOOR_RESOURCE_ID \
+  --workspace $LOG_WORKSPACE_ID \
+  --logs '[{"category": "FrontdoorAccessLog", "enabled": true}, {"category": "WAFLog", "enabled": true}]'
