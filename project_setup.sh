@@ -3,7 +3,7 @@ az login
 
 export SSL_EMAIL_ADDRESS="$(az account show --query user.name --output tsv)"
 export NETWORK_PREFIX="$(($RANDOM % 253 + 1))"
-export MY_RESOURCE_GROUP_NAME="Group5_resource_group" 
+export MY_RESOURCE_GROUP_NAME="Group5_resource_group_anthony" 
 export REGION="canadacentral"
 export REGION_2="eastus"
 export DB_KEY_VAULT="WebOpsDBKeyVaultTest$(($RANDOM % 10000 + 1))" #need to change
@@ -46,8 +46,9 @@ export SUBSCRIPTIONS_ID="$(az account show --query id --output tsv)"
 export MSYS_NO_PATHCONV=1
 export ACR_PRIVATE_ENDPOINT_NAME="acrConnection"
 export ACR_PRIVATE_ENDPOINT_GROUP_ID="registry"
-
+export VM_NAME="Webops_VM"
 export DOCKER_HUB_IMAGE_NAME="unaveed1122/webopsimageforwp:v1"
+export vm_admin_pw="webops_vm_1234"
 
 #create resource group
 az group create --name $MY_RESOURCE_GROUP_NAME --location $REGION
@@ -69,15 +70,16 @@ az network vnet subnet create \
 # Create AKS Subnet-NSG
 az network nsg create --resource-group $MY_RESOURCE_GROUP_NAME --name $AKS_NSG_NAME --location $REGION
 
-# Create Database Subnet
-az network vnet subnet create \
-  --name $DB_SUBNET_NAME \
-  --resource-group $MY_RESOURCE_GROUP_NAME \
-  --vnet-name $MY_VNET_NAME \
-  --address-prefixes $DB_SUBNET_PREFIX
+# # Create Database Subnet
+# az network vnet subnet create \
+#   --name $DB_SUBNET_NAME \
+#   --resource-group $MY_RESOURCE_GROUP_NAME \
+#   --vnet-name $MY_VNET_NAME \
+#   --address-prefixes $DB_SUBNET_PREFIX \
 
-# Create Database Subnet-NSG
-az network nsg create --resource-group $MY_RESOURCE_GROUP_NAME --name $DB_NSG_NAME --location $REGION
+
+# # Create Database Subnet-NSG
+# az network nsg create --resource-group $MY_RESOURCE_GROUP_NAME --name $DB_NSG_NAME --location $REGION
 
 # Create Application Gateway Subnet
 az network vnet subnet create \
@@ -94,7 +96,8 @@ az network vnet subnet create \
   --name $PRIVATE_ENDPOINT_SUBNET_NAME \
   --resource-group $MY_RESOURCE_GROUP_NAME \
   --vnet-name $MY_VNET_NAME \
-  --address-prefixes $PRIVATE_ENDPOINT_SUBNET_PREFIX
+  --address-prefixes $PRIVATE_ENDPOINT_SUBNET_PREFIX \
+  --disable-private-endpoint-network-policies true
 
 # Create Private Endpoint Subnet-NSG:
 az network nsg create --resource-group $MY_RESOURCE_GROUP_NAME --name $PRIVATE_ENDPOINT_NSG_NAME --location $REGION
@@ -132,6 +135,18 @@ az keyvault set-policy -g $MY_RESOURCE_GROUP_NAME \
   --object-id $identityPrincipalId \
   --key-permissions wrapKey unwrapKey get list
 
+
+# Create the VM for testing the connection between private endpoing and mysql server
+az vm create \
+  -g $MY_RESOURCE_GROUP_NAME \
+  -n $VM_NAME \
+  --image Win2019Datacenter \
+  --location $REGION \
+  --admin-password $vm_admin_pw
+
+#get vm public ip address
+export vm_puiblic_ip="$(az vm list-ip-addresses -g $MY_RESOURCE_GROUP_NAME -n $VM_NAME --query [].virtualMachine.network.publicIpAddresses[0].ipAddress -o tsv)"
+
 # create mysql server
 az mysql flexible-server create \
     --admin-password $MY_MYSQL_ADMIN_PW \
@@ -146,19 +161,60 @@ az mysql flexible-server create \
     --sku-name Standard_B2s \
     --storage-auto-grow Disabled \
     --storage-size 20 \
-    --vnet $MY_VNET_NAME \
-    --subnet $DB_SUBNET_NAME \
     --key $keyIdentifier \
     --identity group5_identity \
-    --private-dns-zone $MY_DNS_LABEL.private.mysql.database.azure.com \
     --tier Burstable \
     --version 8.0.21 \
-    --yes -o JSON
+    --yes -o JSON  \
+    --public-access $vm_puiblic_ip
+    #--private-dns-zone $MY_DNS_LABEL.private.mysql.database.azure.com \
+    #--vnet $MY_VNET_NAME \
+    #--subnet $DB_SUBNET_NAME \
+  
 
 runtime="10 minute"; endtime=$(date -ud "$runtime" +%s); while [[ $(date -u +%s) -le $endtime ]]; do STATUS=$(az mysql flexible-server show -g $MY_RESOURCE_GROUP_NAME -n $MY_MYSQL_DB_NAME --query state -o tsv); echo $STATUS; if [ "$STATUS" = 'Ready' ]; then break; else sleep 10; fi; done
 
 
+#create private endpoint for az mysql
+az network private-endpoint create \
+    --name DBPrivateEndpoint \
+    --resource-group $MY_RESOURCE_GROUP_NAME \
+    --vnet-name $MY_VNET_NAME  \
+    --subnet $PRIVATE_ENDPOINT_SUBNET_NAME \
+    --private-connection-resource-id $(az resource show -g $MY_RESOURCE_GROUP_NAME -n $MY_MYSQL_SERVER_NAME --resource-type "Microsoft.DBforMySQL/flexibleServers" --query "id" -o tsv) \
+    --group-id mysqlServer \
+    --connection-name DBConnection \
+    --location $REGION
 
+#Configure private DNS Zone
+az network private-dns zone create --resource-group $MY_RESOURCE_GROUP_NAME \
+   --name $MY_DNS_LABEL.private.mysql.database.azure.com
+
+
+az network private-dns link vnet create --resource-group $MY_RESOURCE_GROUP_NAME \
+   --zone-name  $MY_DNS_LABEL.private.mysql.database.azure.com \
+   --name DBDNSLink \
+   --virtual-network $MY_VNET_NAME \
+   --registration-enabled false
+
+export networkInterfaceId=$(az network private-endpoint show --name DBPrivateEndpoint --resource-group $MY_RESOURCE_GROUP_NAME --query 'networkInterfaces[0].id' -o tsv)
+export private_ip=$(az resource show --ids $networkInterfaceId --api-version 2019-04-01 --query 'properties.ipConfigurations[0].properties.privateIPAddress' -o tsv)
+
+az network private-dns record-set a create --name dbserver \
+    --zone-name $MY_DNS_LABEL.private.mysql.database.azure.com \
+    --resource-group $MY_RESOURCE_GROUP_NAME
+
+az network private-dns record-set a add-record --record-set-name dbserver \
+    --zone-name $MY_DNS_LABEL.private.mysql.database.azure.com \
+    -g $MY_RESOURCE_GROUP_NAME \
+    -a $private_ip
+
+
+
+
+
+
+---------------------------------------------------------
 #TEMPORARY TURN OFF FOR NOW
 az mysql flexible-server parameter set \
   --name require_secure_transport \
@@ -190,6 +246,8 @@ az aks create \
     --network-policy azure \
     --no-ssh-key \
     --node-vm-size Standard_DS2_v2 \
+    --service-cidr 10.255.0.0/24 \
+    --dns-service-ip 10.255.0.10 \
     --zones 1 2 3 \
     --enable-addons azure-keyvault-secrets-provider \
     --generate-ssh-keys \
@@ -218,8 +276,8 @@ az network private-endpoint create \
   --subnet $ACR_SUBNET_NAME \
   --connection-name $ACR_PRIVATE_ENDPOINT_NAME \
   --group-id $ACR_PRIVATE_ENDPOINT_GROUP_ID \
-  --private-connection-resource-id "/subscriptions/$SUBSCRIPTIONS_ID/resourceGroups/$MY_RESOURCE_GROUP_NAME/providers/Microsoft.ContainerRegistry/registries/$ACR_NAME"
-
+  --private-connection-resource-id "/subscriptions/$SUBSCRIPTIONS_ID/resourceGroups/$MY_RESOURCE_GROUP_NAME/providers/Microsoft.ContainerRegistry/registries/$ACR_NAME" \
+  --location $REGION
 
 #get managed identity id from aks cluster
 export aks_prinipal_id="$(az identity list -g MC_${MY_RESOURCE_GROUP_NAME}_${MY_AKS_CLUSTER_NAME}_${REGION} --query [0].principalId --output tsv)"
