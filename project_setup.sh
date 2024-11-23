@@ -549,4 +549,3 @@ az network front-door waf-policy rule match-condition add \
 
 # Get hostname for Front Door endpoint
 az afd endpoint show --resource-group $MY_RESOURCE_GROUP_NAME --profile-name $FRONT_DOOR_NAME --endpoint-name $FRONT_DOOR_ENDPOINT_NAME
-
