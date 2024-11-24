@@ -150,16 +150,16 @@ az keyvault set-policy -g $MY_RESOURCE_GROUP_NAME \
   --key-permissions wrapKey unwrapKey get list
 
 
-# Create the VM for testing the connection between private endpoing and mysql server
-az vm create \
-  -g $MY_RESOURCE_GROUP_NAME \
-  -n $VM_NAME \
-  --image Win2019Datacenter \
-  --location $REGION \
-  --admin-password $vm_admin_pw
+# # Create the VM for testing the connection between private endpoing and mysql server
+# az vm create \
+#   -g $MY_RESOURCE_GROUP_NAME \
+#   -n $VM_NAME \
+#   --image Win2019Datacenter \
+#   --location $REGION \
+#   --admin-password $vm_admin_pw
 
-#get vm public ip address
-export vm_puiblic_ip="$(az vm list-ip-addresses -g $MY_RESOURCE_GROUP_NAME -n $VM_NAME --query [].virtualMachine.network.publicIpAddresses[0].ipAddress -o tsv)"
+# #get vm public ip address
+# export vm_puiblic_ip="$(az vm list-ip-addresses -g $MY_RESOURCE_GROUP_NAME -n $VM_NAME --query [].virtualMachine.network.publicIpAddresses[0].ipAddress -o tsv)"
 
 # create mysql server
 az mysql flexible-server create \
