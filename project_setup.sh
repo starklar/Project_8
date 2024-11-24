@@ -8,13 +8,15 @@ az login
 
 export SSL_EMAIL_ADDRESS="$(az account show --query user.name --output tsv)"
 export NETWORK_PREFIX="$(($RANDOM % 253 + 1))"
-export MY_RESOURCE_GROUP_NAME="Group5_resource_group" 
+export MY_RESOURCE_GROUP_NAME="Group5_resource_group_anthony" 
 export REGION="canadacentral"
 export REGION_2="eastus"
-export DB_KEY_VAULT="WebOpsDBKeyVaultTest$(($RANDOM % 10000 + 1))"
+export DB_KEY_VAULT="WebOpsDBKeyVaultTest$(($RANDOM % 10000 + 1))" #need to change
+#export BACKUP_DB_KEY_VAULT="WebOpsDBKeyVaultBackup"
 export MY_AKS_CLUSTER_NAME="webopsAKSCluster"
 export MY_PUBLIC_IP_NAME="webopsPublicIP"
 export MY_DNS_LABEL="webopsdnslabel"
+export AKS_DNS_LABEL="webopsaksdnslabel"
 export MY_VNET_NAME="webopsVNet"
 export MYSQL_SUBNET_NAME="myMySQLSN"
 export AKS_SUBNET_NAME="AKSSubnet"
@@ -82,6 +84,17 @@ az network vnet subnet create \
 # Create AKS Subnet-NSG
 az network nsg create --resource-group $MY_RESOURCE_GROUP_NAME --name $AKS_NSG_NAME --location $REGION
 
+# # Create Database Subnet
+# az network vnet subnet create \
+#   --name $DB_SUBNET_NAME \
+#   --resource-group $MY_RESOURCE_GROUP_NAME \
+#   --vnet-name $MY_VNET_NAME \
+#   --address-prefixes $DB_SUBNET_PREFIX \
+
+
+# # Create Database Subnet-NSG
+# az network nsg create --resource-group $MY_RESOURCE_GROUP_NAME --name $DB_NSG_NAME --location $REGION
+
 # Create Application Gateway Subnet
 az network vnet subnet create \
   --name $APP_GATEWAY_SUBNET_NAME \
@@ -102,6 +115,16 @@ az network vnet subnet create \
 
 # Create Private Endpoint Subnet-NSG:
 az network nsg create --resource-group $MY_RESOURCE_GROUP_NAME --name $PRIVATE_ENDPOINT_NSG_NAME --location $REGION
+
+# Create ACR Subnet (Optional-Will require ACR tier to be Premium)
+#az network vnet subnet create \
+#  --name $ACR_SUBNET_NAME \
+#  --resource-group $MY_RESOURCE_GROUP_NAME \
+#  --vnet-name $MY_VNET_NAME \
+#  --address-prefixes $ACR_SUBNET_PREFIX
+
+# Create ACR Subnet-NSG: (Optional)
+#az network nsg create --resource-group $MY_RESOURCE_GROUP_NAME --name $ACR_NSG_NAME --location $REGION
 
 
 
@@ -158,6 +181,9 @@ az mysql flexible-server create \
     --version 8.0.21 \
     --yes -o JSON  \
     --public-access $vm_puiblic_ip
+    #--private-dns-zone $MY_DNS_LABEL.private.mysql.database.azure.com \
+    #--vnet $MY_VNET_NAME \
+    #--subnet $DB_SUBNET_NAME \
   
 
 runtime="10 minute"; endtime=$(date -ud "$runtime" +%s); while [[ $(date -u +%s) -le $endtime ]]; do STATUS=$(az mysql flexible-server show -g $MY_RESOURCE_GROUP_NAME -n $MY_MYSQL_SERVER_NAME --query state -o tsv); echo $STATUS; if [ "$STATUS" = 'Ready' ]; then break; else sleep 10; fi; done
@@ -168,19 +194,20 @@ az network private-endpoint create \
     --name DBPrivateEndpoint \
     --resource-group $MY_RESOURCE_GROUP_NAME \
     --vnet-name $MY_VNET_NAME  \
-    --subnet $PRIVATE_ENDPOINT_SUBNET_NAME \
+    --subnet $AKS_SUBNET_NAME \
     --private-connection-resource-id $(az resource show -g $MY_RESOURCE_GROUP_NAME -n $MY_MYSQL_SERVER_NAME --resource-type "Microsoft.DBforMySQL/flexibleServers" --query "id" -o tsv) \
     --group-id mysqlServer \
     --connection-name DBConnection \
-    --location $REGION
+    --location $REGION \
+    --subscription $SUBSCRIPTIONS_ID
 
 #Configure private DNS Zone
 az network private-dns zone create --resource-group $MY_RESOURCE_GROUP_NAME \
-   --name $MY_DNS_LABEL.private.mysql.database.azure.com
+   --name privatelink.mysql.database.azure.com
 
 
 az network private-dns link vnet create --resource-group $MY_RESOURCE_GROUP_NAME \
-   --zone-name  $MY_DNS_LABEL.private.mysql.database.azure.com \
+   --zone-name  privatelink.mysql.database.azure.com \
    --name DBDNSLink \
    --virtual-network $MY_VNET_NAME \
    --registration-enabled false
@@ -188,12 +215,12 @@ az network private-dns link vnet create --resource-group $MY_RESOURCE_GROUP_NAME
 export networkInterfaceId=$(az network private-endpoint show --name DBPrivateEndpoint --resource-group $MY_RESOURCE_GROUP_NAME --query 'networkInterfaces[0].id' -o tsv)
 export private_ip=$(az resource show --ids $networkInterfaceId --api-version 2019-04-01 --query 'properties.ipConfigurations[0].properties.privateIPAddress' -o tsv)
 
-az network private-dns record-set a create --name dbserver \
-    --zone-name $MY_DNS_LABEL.private.mysql.database.azure.com \
+az network private-dns record-set a create --name $MY_MYSQL_SERVER_NAME \
+    --zone-name privatelink.mysql.database.azure.com \
     --resource-group $MY_RESOURCE_GROUP_NAME
 
-az network private-dns record-set a add-record --record-set-name dbserver \
-    --zone-name $MY_DNS_LABEL.private.mysql.database.azure.com \
+az network private-dns record-set a add-record --record-set-name $MY_MYSQL_SERVER_NAME \
+    --zone-name privatelink.mysql.database.azure.com \
     -g $MY_RESOURCE_GROUP_NAME \
     -a $private_ip
 
@@ -253,6 +280,17 @@ kubectl create secret generic mysql-secret \
   --from-literal=password=$MY_MYSQL_ADMIN_PW
 
 
+# ERROR: The current registry SKU does not support private endpoint connection. Please upgrade your registry to premium SKU
+# Create ACR Private Endpoint
+#az network private-endpoint create \
+#  -n $ACR_PRIVATE_ENDPOINT_NAME \
+#  -g $MY_RESOURCE_GROUP_NAME \
+#  --vnet-name $MY_VNET_NAME \
+#  --subnet $ACR_SUBNET_NAME \
+#  --connection-name $ACR_PRIVATE_ENDPOINT_NAME \
+#  --group-id $ACR_PRIVATE_ENDPOINT_GROUP_ID \
+#  --private-connection-resource-id "/subscriptions/$SUBSCRIPTIONS_ID/resourceGroups/$MY_RESOURCE_GROUP_NAME/providers/Microsoft.ContainerRegistry/registries/$ACR_NAME"
+
 #get managed identity id from aks cluster
 export aks_prinipal_id="$(az identity list -g MC_${MY_RESOURCE_GROUP_NAME}_${MY_AKS_CLUSTER_NAME}_${REGION} --query [0].principalId --output tsv)"
 
@@ -304,7 +342,7 @@ spec:
         image: ${ACR_NAME}.azurecr.io/${DOCKER_HUB_IMAGE_NAME}
         env:
         - name: WORDPRESS_DB_HOST
-          value: ${MY_MYSQL_HOSTNAME}
+          value: ${MY_MYSQL_SERVER_NAME}.privatelink.mysql.database.azure.com
         - name: WORDPRESS_DB_NAME
           value: ${MY_MYSQL_DB_NAME}
         - name: WORDPRESS_DB_USER
@@ -347,7 +385,7 @@ kubectl apply -f deployment.yaml
 kubectl apply -f service.yaml
 
 # Set static IP address
-export MY_STATIC_IP=$(az network public-ip create --resource-group MC_${MY_RESOURCE_GROUP_NAME}_${MY_AKS_CLUSTER_NAME}_${REGION} --location ${REGION} --name ${MY_PUBLIC_IP_NAME} --dns-name ${MY_DNS_LABEL} --sku Standard --allocation-method static --version IPv4 --zone 1 2 3 --query publicIp.ipAddress -o tsv)
+export MY_STATIC_IP=$(az network public-ip create --resource-group MC_${MY_RESOURCE_GROUP_NAME}_${MY_AKS_CLUSTER_NAME}_${REGION} --location ${REGION} --name ${MY_PUBLIC_IP_NAME} --dns-name ${AKS_DNS_LABEL} --sku Standard --allocation-method static --version IPv4 --zone 1 2 3 --query publicIp.ipAddress -o tsv)
 
 # Create Ingress
 helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
@@ -357,7 +395,7 @@ helm repo update
 helm upgrade --install --cleanup-on-fail --atomic ingress-nginx ingress-nginx/ingress-nginx \
         --namespace ingress-nginx \
         --create-namespace \
-        --set controller.service.annotations."service\.beta\.kubernetes\.io/azure-dns-label-name"=$MY_DNS_LABEL \
+        --set controller.service.annotations."service\.beta\.kubernetes\.io/azure-dns-label-name"=$AKS_DNS_LABEL \
         --set controller.service.loadBalancerIP=$MY_STATIC_IP \
         --set controller.service.annotations."service\.beta\.kubernetes\.io/azure-load-balancer-health-probe-request-path"=/healthz \
         --wait --timeout 10m0s
@@ -512,9 +550,3 @@ az network front-door waf-policy rule match-condition add \
 
 # Get hostname for Front Door endpoint
 az afd endpoint show --resource-group $MY_RESOURCE_GROUP_NAME --profile-name $FRONT_DOOR_NAME --endpoint-name $FRONT_DOOR_ENDPOINT_NAME
-# Sleep for 3 minutes to let things for Front Door get set up.
-sleep 3m
-
-# Get hostname for Front Door endpoint
-az afd endpoint show --resource-group $MY_RESOURCE_GROUP_NAME --profile-name $FRONT_DOOR_NAME --endpoint-name $FRONT_DOOR_ENDPOINT_NAME
-
