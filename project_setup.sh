@@ -8,7 +8,7 @@ az login
 
 export SSL_EMAIL_ADDRESS="$(az account show --query user.name --output tsv)"
 export NETWORK_PREFIX="$(($RANDOM % 253 + 1))"
-export MY_RESOURCE_GROUP_NAME="Group5_resource_group_anthony" 
+export MY_RESOURCE_GROUP_NAME="Group5_resource_group" 
 export REGION="canadacentral"
 export REGION_2="eastus"
 export DB_KEY_VAULT="WebOpsDBKeyVaultTest$(($RANDOM % 10000 + 1))" #need to change
@@ -205,7 +205,7 @@ az network private-endpoint create \
 az network private-dns zone create --resource-group $MY_RESOURCE_GROUP_NAME \
    --name privatelink.mysql.database.azure.com
 
-
+#Link private dns to existing Vnet, make the private accessible in public internet
 az network private-dns link vnet create --resource-group $MY_RESOURCE_GROUP_NAME \
    --zone-name  privatelink.mysql.database.azure.com \
    --name DBDNSLink \
@@ -215,10 +215,11 @@ az network private-dns link vnet create --resource-group $MY_RESOURCE_GROUP_NAME
 export networkInterfaceId=$(az network private-endpoint show --name DBPrivateEndpoint --resource-group $MY_RESOURCE_GROUP_NAME --query 'networkInterfaces[0].id' -o tsv)
 export private_ip=$(az resource show --ids $networkInterfaceId --api-version 2019-04-01 --query 'properties.ipConfigurations[0].properties.privateIPAddress' -o tsv)
 
+#add the record set as the name we set in db host
 az network private-dns record-set a create --name $MY_MYSQL_SERVER_NAME \
     --zone-name privatelink.mysql.database.azure.com \
     --resource-group $MY_RESOURCE_GROUP_NAME
-
+#add the private ip of aks cluster and link with mysql server
 az network private-dns record-set a add-record --record-set-name $MY_MYSQL_SERVER_NAME \
     --zone-name privatelink.mysql.database.azure.com \
     -g $MY_RESOURCE_GROUP_NAME \
