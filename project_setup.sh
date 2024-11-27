@@ -6,53 +6,46 @@
 #connect az & login, comment out the below line to run script as a bash file on Azure Cloud Shell
 az login
 
-export SSL_EMAIL_ADDRESS="$(az account show --query user.name --output tsv)"
-export NETWORK_PREFIX="$(($RANDOM % 253 + 1))"
-export MY_RESOURCE_GROUP_NAME="Group5_resource_group" 
+
+
+#Declare Variables
+export MY_RESOURCE_GROUP_NAME="Group5_resource_group_Anthony" 
 export REGION="canadacentral"
-export REGION_2="eastus"
-export DB_KEY_VAULT="WebOpsDBKeyVaultTest$(($RANDOM % 10000 + 1))" #need to change
-#export BACKUP_DB_KEY_VAULT="WebOpsDBKeyVaultBackup"
-export MY_AKS_CLUSTER_NAME="webopsAKSCluster"
+export GROUP_ID="$(az ad group show --group "WebOps" --query "id" --output tsv)"
+export SUBSCRIPTIONS_ID="$(az account show --query id --output tsv)"
+
+#IP and DNS
 export MY_PUBLIC_IP_NAME="webopsPublicIP"
 export MY_DNS_LABEL="webopsdnslabel"
-export AKS_DNS_LABEL="webopsaksdnslabel"
-export MY_VNET_NAME="webopsVNet"
-export MYSQL_SUBNET_NAME="myMySQLSN"
-export AKS_SUBNET_NAME="AKSSubnet"
-export AKS_NSG_NAME="AKSSubnetNSG"
-export DB_SUBNET_NAME="DBSubnet"
-export DB_NSG_NAME="DBSubnetNSG"
-export APP_GATEWAY_SUBNET_NAME="AppGatewaySubnet"
-export APP_GATEWAY_NSG_NAME="AppGatewaySubnetNSG"
-export ACR_SUBNET_NAME="ACRSubnet"
-export ACR_NSG_NAME="ACRSubnetNSG"
-export PRIVATE_ENDPOINT_SUBNET_NAME="PrivateEndpointSubnet"
-export PRIVATE_ENDPOINT_NSG_NAME="PrivateEndpointSubnetNSG"
-export MY_VNET_PREFIX="10.$NETWORK_PREFIX.0.0/16"
-export AKS_SUBNET_PREFIX="10.$NETWORK_PREFIX.1.0/24"
-export DB_SUBNET_PREFIX="10.$NETWORK_PREFIX.2.0/24"
-export APP_GATEWAY_SUBNET_PREFIX="10.$NETWORK_PREFIX.3.0/24"
-export ACR_SUBNET_PREFIX="10.$NETWORK_PREFIX.4.0/24"
-export PRIVATE_ENDPOINT_SUBNET_PREFIX="10.$NETWORK_PREFIX.5.0/24"
-export MY_WP_ADMIN_PW="g8tr_p#dw9RDo"
-export MY_WP_ADMIN_USER="webops"
 export FQDN="$MY_DNS_LABEL.export REGION.cloudapp.azure.com"
+
+
+# ACR
+export ACR_PRIVATE_ENDPOINT_NAME="acrConnection"
+export ACR_PRIVATE_ENDPOINT_GROUP_ID="registry"
+export DOCKER_HUB_IMAGE_NAME="unaveed1122/webopsimageforwp:v1"
+export ACR_NAME="webopsacr134" #need to change
+
+#Azure MySql
+export MYSQL_SUBNET_NAME="myMySQLSN"
 export MY_MYSQL_SERVER_NAME="mysqlwpsrvr5"
 export MY_MYSQL_DB_NAME="webopswordpressdb"
 export MY_MYSQL_ADMIN_USERNAME="developer"
 export MY_MYSQL_ADMIN_PW="Naveed@1302"
 export MY_MYSQL_HOSTNAME="$MY_MYSQL_SERVER_NAME.mysql.database.azure.com"
-export ACR_NAME="webopsacr13"
-export MY_NAMESPACE="webops-ns13"
-export HSM_NAME="group5hsm"
-#The group name here might change based on account, we should try to be consistent with it though
-export GROUP_ID="$(az ad group show --group "WebOps" --query "id" --output tsv)"
-export SUBSCRIPTIONS_ID="$(az account show --query id --output tsv)"
-export MSYS_NO_PATHCONV=1
-export ACR_PRIVATE_ENDPOINT_NAME="acrConnection"
-export ACR_PRIVATE_ENDPOINT_GROUP_ID="registry"
-export VM_NAME="Webops_VM"
+export MY_WP_ADMIN_PW="g8tr_p#dw9RDo"
+export MY_WP_ADMIN_USER="webops"
+
+#Keyvault
+export DB_KEY_VAULT="WebOpsDBKeyVaultTest$(($RANDOM % 10000 + 1))" #need to change
+
+#AKS
+export MY_AKS_CLUSTER_NAME="webopsAKSCluster"
+export AKS_DNS_LABEL="webopsaksdnslabelanthony" #need to change back 
+export AKS_SUBNET_NAME="AKSSubnet"
+export AKS_NSG_NAME="AKSSubnetNSG"
+
+#AFD
 export ORIGIN_GROUP_NAME="webopsOriginGroup"
 export PRIMARY_ORIGIN_NAME="primaryOrigin"
 export ROUTE_NAME="webOpsMainRoute"
@@ -61,8 +54,33 @@ export FRONT_DOOR_NAME="webopsFrontDoor"
 export FRONT_DOOR_ENDPOINT_NAME="webopsFrontEnd"
 export FRONT_DOOR_SECURITY_POLICY_NAME="fd-sec-po"
 export FRONT_DOOR_RULE_SET_NAME="frontDoorRuleSet"
-export DOCKER_HUB_IMAGE_NAME="unaveed1122/webopsimageforwp:v1"
-export vm_admin_pw="webops_vm_1234"
+
+#Vnet and subnet
+export NETWORK_PREFIX="$(($RANDOM % 253 + 1))"
+export MY_VNET_PREFIX="10.$NETWORK_PREFIX.0.0/16"
+export AKS_SUBNET_PREFIX="10.$NETWORK_PREFIX.1.0/24"
+export DB_SUBNET_PREFIX="10.$NETWORK_PREFIX.2.0/24"
+export APP_GATEWAY_SUBNET_PREFIX="10.$NETWORK_PREFIX.3.0/24"
+export ACR_SUBNET_PREFIX="10.$NETWORK_PREFIX.4.0/24"
+export PRIVATE_ENDPOINT_SUBNET_PREFIX="10.$NETWORK_PREFIX.5.0/24"
+export MY_VNET_NAME="webopsVNet"
+export DB_SUBNET_NAME="DBSubnet"
+export DB_NSG_NAME="DBSubnetNSG"
+export APP_GATEWAY_SUBNET_NAME="AppGatewaySubnet"
+export APP_GATEWAY_NSG_NAME="AppGatewaySubnetNSG"
+export ACR_SUBNET_NAME="ACRSubnet"
+export ACR_NSG_NAME="ACRSubnetNSG"
+export PRIVATE_ENDPOINT_SUBNET_NAME="PrivateEndpointSubnet"
+export PRIVATE_ENDPOINT_NSG_NAME="PrivateEndpointSubnetNSG"
+
+
+#others
+#The group name here might change based on account, we should try to be consistent with it though
+export SSL_EMAIL_ADDRESS="$(az account show --query user.name --output tsv)"
+export REGION_2="eastus"
+export MY_NAMESPACE="webops-ns13"
+export HSM_NAME="group5hsm"
+export MSYS_NO_PATHCONV=1
 
 #create resource group
 az group create --name $MY_RESOURCE_GROUP_NAME --location $REGION
@@ -149,18 +167,6 @@ az keyvault set-policy -g $MY_RESOURCE_GROUP_NAME \
   --object-id $identityPrincipalId \
   --key-permissions wrapKey unwrapKey get list
 
-
-# # Create the VM for testing the connection between private endpoing and mysql server
-# az vm create \
-#   -g $MY_RESOURCE_GROUP_NAME \
-#   -n $VM_NAME \
-#   --image Win2019Datacenter \
-#   --location $REGION \
-#   --admin-password $vm_admin_pw
-
-# #get vm public ip address
-# export vm_puiblic_ip="$(az vm list-ip-addresses -g $MY_RESOURCE_GROUP_NAME -n $VM_NAME --query [].virtualMachine.network.publicIpAddresses[0].ipAddress -o tsv)"
-
 # create mysql server
 az mysql flexible-server create \
     --admin-password $MY_MYSQL_ADMIN_PW \
@@ -179,8 +185,8 @@ az mysql flexible-server create \
     --identity group5_identity \
     --tier Burstable \
     --version 8.0.21 \
-    --yes -o JSON  \
-    --public-access $vm_puiblic_ip
+    --yes -o JSON 
+    #--public-access $vm_puiblic_ip
     #--private-dns-zone $MY_DNS_LABEL.private.mysql.database.azure.com \
     #--vnet $MY_VNET_NAME \
     #--subnet $DB_SUBNET_NAME \
@@ -198,8 +204,7 @@ az network private-endpoint create \
     --private-connection-resource-id $(az resource show -g $MY_RESOURCE_GROUP_NAME -n $MY_MYSQL_SERVER_NAME --resource-type "Microsoft.DBforMySQL/flexibleServers" --query "id" -o tsv) \
     --group-id mysqlServer \
     --connection-name DBConnection \
-    --location $REGION \
-    --subscription $SUBSCRIPTIONS_ID
+    --location $REGION 
 
 #Configure private DNS Zone
 az network private-dns zone create --resource-group $MY_RESOURCE_GROUP_NAME \
@@ -406,7 +411,9 @@ helm install quickstart ingress-nginx/ingress-nginx
 # Get Service Info
 kubectl get service
 
-
+#Create global up DNS zone for setting dns with https certificate in FrontDoor
+az network dns zone create --name "$FRONT_DOOR_ENDPOINT_NAME.com" \
+    --resource-group $MY_RESOURCE_GROUP_NAME
 
 #Set up Front door, Standard version
 # Change sku to: Premium_AzureFrontDoor, for managed rules
@@ -450,6 +457,7 @@ az afd origin create \
     --profile-name $FRONT_DOOR_NAME \
     --origin-group-name $ORIGIN_GROUP_NAME \
     --origin-name $PRIMARY_ORIGIN_NAME \
+    --enforce-certificate-name-check false \
     --priority 1 \
     --weight 1000 \
     --enabled-state Enabled \
@@ -466,8 +474,10 @@ az afd route create \
     --forwarding-protocol MatchRequest \
     --route-name $ROUTE_NAME \
     --origin-group $ORIGIN_GROUP_NAME \
-    --supported-protocols Http  \
-    --link-to-default-domain Enabled 
+    --supported-protocols Http \
+    --link-to-default-domain Enabled
+#    --custom-domains $FRONT_DOOR_ENDPOINT_NAME\
+     
 
 # Create WAF for Front Door
 # Change sku to: Premium_AzureFrontDoor, for managed rules
