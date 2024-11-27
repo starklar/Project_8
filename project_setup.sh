@@ -179,8 +179,8 @@ az mysql flexible-server create \
     --identity group5_identity \
     --tier Burstable \
     --version 8.0.21 \
-    --yes -o JSON  \
-    --public-access $vm_puiblic_ip
+    --yes -o JSON  
+    #--public-access $vm_puiblic_ip
     #--private-dns-zone $MY_DNS_LABEL.private.mysql.database.azure.com \
     #--vnet $MY_VNET_NAME \
     #--subnet $DB_SUBNET_NAME \
