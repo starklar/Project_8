@@ -8,11 +8,11 @@ az login
 
 export SSL_EMAIL_ADDRESS="$(az account show --query user.name --output tsv)"
 export NETWORK_PREFIX="$(($RANDOM % 253 + 1))"
-export MY_RESOURCE_GROUP_NAME="Group5_resource_group" 
+export NETWORK_PREFIX2="$(($RANDOM % 253 + 1))"
+export MY_RESOURCE_GROUP_NAME="Group5_resource_group_test" 
 export REGION="canadacentral"
-export REGION_2="eastus"
-export DB_KEY_VAULT="WebOpsDBKeyVaultTest$(($RANDOM % 10000 + 1))" #need to change
-#export BACKUP_DB_KEY_VAULT="WebOpsDBKeyVaultBackup"
+export REGION_2="canadaeast"
+export DB_KEY_VAULT="WebOpsDBKeyVaultTest$(($RANDOM % 10000 + 1))"
 export MY_AKS_CLUSTER_NAME="webopsAKSCluster"
 export MY_PUBLIC_IP_NAME="webopsPublicIP"
 export MY_DNS_LABEL="webopsdnslabel"
@@ -35,18 +35,23 @@ export DB_SUBNET_PREFIX="10.$NETWORK_PREFIX.2.0/24"
 export APP_GATEWAY_SUBNET_PREFIX="10.$NETWORK_PREFIX.3.0/24"
 export ACR_SUBNET_PREFIX="10.$NETWORK_PREFIX.4.0/24"
 export PRIVATE_ENDPOINT_SUBNET_PREFIX="10.$NETWORK_PREFIX.5.0/24"
+export MY_VNET_PREFIX2="10.$NETWORK_PREFIX2.0.0/16"
+export AKS_SUBNET_PREFIX2="10.$NETWORK_PREFIX2.1.0/24"
+export DB_SUBNET_PREFIX2="10.$NETWORK_PREFIX2.2.0/24"
+export APP_GATEWAY_SUBNET_PREFIX2="10.$NETWORK_PREFIX2.3.0/24"
+export ACR_SUBNET_PREFIX2="10.$NETWORK_PREFIX2.4.0/24"
+export PRIVATE_ENDPOINT_SUBNET_PREFIX2="10.$NETWORK_PREFIX2.5.0/24"
 export MY_WP_ADMIN_PW="g8tr_p#dw9RDo"
 export MY_WP_ADMIN_USER="webops"
 export FQDN="$MY_DNS_LABEL.export REGION.cloudapp.azure.com"
-export MY_MYSQL_SERVER_NAME="mysqlwpsrvr5"
+export MY_MYSQL_SERVER_NAME="mysqlwpsrvr2"
 export MY_MYSQL_DB_NAME="webopswordpressdb"
 export MY_MYSQL_ADMIN_USERNAME="developer"
 export MY_MYSQL_ADMIN_PW="Naveed@1302"
 export MY_MYSQL_HOSTNAME="$MY_MYSQL_SERVER_NAME.mysql.database.azure.com"
-export ACR_NAME="webopsacr13"
+export ACR_NAME="webopsacr1"
 export MY_NAMESPACE="webops-ns13"
 export HSM_NAME="group5hsm"
-#The group name here might change based on account, we should try to be consistent with it though
 export GROUP_ID="$(az ad group show --group "WebOps" --query "id" --output tsv)"
 export SUBSCRIPTIONS_ID="$(az account show --query id --output tsv)"
 export MSYS_NO_PATHCONV=1
@@ -55,6 +60,7 @@ export ACR_PRIVATE_ENDPOINT_GROUP_ID="registry"
 export VM_NAME="Webops_VM"
 export ORIGIN_GROUP_NAME="webopsOriginGroup"
 export PRIMARY_ORIGIN_NAME="primaryOrigin"
+export SECONDARY_ORIGIN_NAME="secondaryOrigin"
 export ROUTE_NAME="webOpsMainRoute"
 export WAF_NAME="frontDoorWAF"
 export FRONT_DOOR_NAME="webopsFrontDoor"
@@ -63,6 +69,13 @@ export FRONT_DOOR_SECURITY_POLICY_NAME="fd-sec-po"
 export FRONT_DOOR_RULE_SET_NAME="frontDoorRuleSet"
 export DOCKER_HUB_IMAGE_NAME="unaveed1122/webopsimageforwp:v1"
 export vm_admin_pw="webops_vm_1234"
+export PRIVATE_DNS_ZONE_NAME="privatelink.mysql.database.azure.com"
+
+export SECONDARY_MY_RESOURCE_GROUP_NAME="Group5_resource_group_secondary"
+export SECONDARY_MY_VNET_NAME="webopsVNetSecondary"
+export SECONDARY_MY_AKS_CLUSTER_NAME="webopsAKSClusterSecondary"
+export SECONDARY_MYSQL_SERVER_NAME="mysqlwpsrvr5secondary"
+export SECONDARY_MYSQL_DB_NAME="webopswordpressdbsecondary"
 
 #create resource group
 az group create --name $MY_RESOURCE_GROUP_NAME --location $REGION
@@ -74,36 +87,23 @@ az network vnet create \
     --name $MY_VNET_NAME \
     --address-prefix $MY_VNET_PREFIX
 
+# Create AKS Subnet-NSG
+az network nsg create --resource-group $MY_RESOURCE_GROUP_NAME --name $AKS_NSG_NAME --location $REGION
+
+
 # Create AKS Subnet
 az network vnet subnet create \
   --name $AKS_SUBNET_NAME \
   --resource-group $MY_RESOURCE_GROUP_NAME \
   --vnet-name $MY_VNET_NAME \
-  --address-prefixes $AKS_SUBNET_PREFIX
-
-# Create AKS Subnet-NSG
-az network nsg create --resource-group $MY_RESOURCE_GROUP_NAME --name $AKS_NSG_NAME --location $REGION
-
-# # Create Database Subnet
-# az network vnet subnet create \
-#   --name $DB_SUBNET_NAME \
-#   --resource-group $MY_RESOURCE_GROUP_NAME \
-#   --vnet-name $MY_VNET_NAME \
-#   --address-prefixes $DB_SUBNET_PREFIX \
+  --address-prefixes $AKS_SUBNET_PREFIX \
+  --network-security-group $AKS_NSG_NAME
 
 
-# # Create Database Subnet-NSG
-# az network nsg create --resource-group $MY_RESOURCE_GROUP_NAME --name $DB_NSG_NAME --location $REGION
 
-# Create Application Gateway Subnet
-az network vnet subnet create \
-  --name $APP_GATEWAY_SUBNET_NAME \
-  --resource-group $MY_RESOURCE_GROUP_NAME \
-  --vnet-name $MY_VNET_NAME \
-  --address-prefixes $APP_GATEWAY_SUBNET_PREFIX
+# Create Private Endpoint Subnet-NSG:
+az network nsg create --resource-group $MY_RESOURCE_GROUP_NAME --name $PRIVATE_ENDPOINT_NSG_NAME --location $REGION
 
-# Create Application Gateway Subnet-NSG:
-az network nsg create --resource-group $MY_RESOURCE_GROUP_NAME --name $APP_GATEWAY_NSG_NAME --location $REGION
 
 # Create Private Endpoint Subnet
 az network vnet subnet create \
@@ -111,21 +111,8 @@ az network vnet subnet create \
   --resource-group $MY_RESOURCE_GROUP_NAME \
   --vnet-name $MY_VNET_NAME \
   --address-prefixes $PRIVATE_ENDPOINT_SUBNET_PREFIX \
-  --disable-private-endpoint-network-policies true
-
-# Create Private Endpoint Subnet-NSG:
-az network nsg create --resource-group $MY_RESOURCE_GROUP_NAME --name $PRIVATE_ENDPOINT_NSG_NAME --location $REGION
-
-# Create ACR Subnet (Optional-Will require ACR tier to be Premium)
-#az network vnet subnet create \
-#  --name $ACR_SUBNET_NAME \
-#  --resource-group $MY_RESOURCE_GROUP_NAME \
-#  --vnet-name $MY_VNET_NAME \
-#  --address-prefixes $ACR_SUBNET_PREFIX
-
-# Create ACR Subnet-NSG: (Optional)
-#az network nsg create --resource-group $MY_RESOURCE_GROUP_NAME --name $ACR_NSG_NAME --location $REGION
-
+  --disable-private-endpoint-network-policies true \
+  --network-security-group $PRIVATE_ENDPOINT_NSG_NAME
 
 
 #Set up keyvault
@@ -149,18 +136,6 @@ az keyvault set-policy -g $MY_RESOURCE_GROUP_NAME \
   --object-id $identityPrincipalId \
   --key-permissions wrapKey unwrapKey get list
 
-
-# # Create the VM for testing the connection between private endpoing and mysql server
-# az vm create \
-#   -g $MY_RESOURCE_GROUP_NAME \
-#   -n $VM_NAME \
-#   --image Win2019Datacenter \
-#   --location $REGION \
-#   --admin-password $vm_admin_pw
-
-# #get vm public ip address
-# export vm_puiblic_ip="$(az vm list-ip-addresses -g $MY_RESOURCE_GROUP_NAME -n $VM_NAME --query [].virtualMachine.network.publicIpAddresses[0].ipAddress -o tsv)"
-
 # create mysql server
 az mysql flexible-server create \
     --admin-password $MY_MYSQL_ADMIN_PW \
@@ -179,13 +154,8 @@ az mysql flexible-server create \
     --identity group5_identity \
     --tier Burstable \
     --version 8.0.21 \
-    --yes -o JSON  
-    #--public-access $vm_puiblic_ip
-    #--private-dns-zone $MY_DNS_LABEL.private.mysql.database.azure.com \
-    #--vnet $MY_VNET_NAME \
-    #--subnet $DB_SUBNET_NAME \
-  
-
+    --yes -o JSON
+    
 runtime="10 minute"; endtime=$(date -ud "$runtime" +%s); while [[ $(date -u +%s) -le $endtime ]]; do STATUS=$(az mysql flexible-server show -g $MY_RESOURCE_GROUP_NAME -n $MY_MYSQL_SERVER_NAME --query state -o tsv); echo $STATUS; if [ "$STATUS" = 'Ready' ]; then break; else sleep 10; fi; done
 
 
@@ -203,11 +173,11 @@ az network private-endpoint create \
 
 #Configure private DNS Zone
 az network private-dns zone create --resource-group $MY_RESOURCE_GROUP_NAME \
-   --name privatelink.mysql.database.azure.com
+   --name $PRIVATE_DNS_ZONE_NAME
 
 #Link private dns to existing Vnet, make the private accessible in public internet
 az network private-dns link vnet create --resource-group $MY_RESOURCE_GROUP_NAME \
-   --zone-name  privatelink.mysql.database.azure.com \
+   --zone-name  $PRIVATE_DNS_ZONE_NAME \
    --name DBDNSLink \
    --virtual-network $MY_VNET_NAME \
    --registration-enabled false
@@ -217,11 +187,11 @@ export private_ip=$(az resource show --ids $networkInterfaceId --api-version 201
 
 #add the record set as the name we set in db host
 az network private-dns record-set a create --name $MY_MYSQL_SERVER_NAME \
-    --zone-name privatelink.mysql.database.azure.com \
+    --zone-name $PRIVATE_DNS_ZONE_NAME \
     --resource-group $MY_RESOURCE_GROUP_NAME
 #add the private ip of aks cluster and link with mysql server
 az network private-dns record-set a add-record --record-set-name $MY_MYSQL_SERVER_NAME \
-    --zone-name privatelink.mysql.database.azure.com \
+    --zone-name $PRIVATE_DNS_ZONE_NAME \
     -g $MY_RESOURCE_GROUP_NAME \
     -a $private_ip
 
@@ -270,27 +240,12 @@ az aks get-credentials --name $MY_AKS_CLUSTER_NAME --resource-group $MY_RESOURCE
 
 # verify the installation is finished
 kubectl get pods -n kube-system -l 'app in (secrets-store-csi-driver,secrets-store-provider-azure)'
-
-#Create K8s keyvault
-az keyvault create -g $MY_RESOURCE_GROUP_NAME --administrators $GROUP_ID -n $DB_KEY_VAULT --location $REGION \
-  --enable-rbac-authorization false
   
 # Create Kubernetes Secret for MySQL Credentials
 kubectl create secret generic mysql-secret \
   --from-literal=username=$MY_MYSQL_ADMIN_USERNAME \
   --from-literal=password=$MY_MYSQL_ADMIN_PW
 
-
-# ERROR: The current registry SKU does not support private endpoint connection. Please upgrade your registry to premium SKU
-# Create ACR Private Endpoint
-#az network private-endpoint create \
-#  -n $ACR_PRIVATE_ENDPOINT_NAME \
-#  -g $MY_RESOURCE_GROUP_NAME \
-#  --vnet-name $MY_VNET_NAME \
-#  --subnet $ACR_SUBNET_NAME \
-#  --connection-name $ACR_PRIVATE_ENDPOINT_NAME \
-#  --group-id $ACR_PRIVATE_ENDPOINT_GROUP_ID \
-#  --private-connection-resource-id "/subscriptions/$SUBSCRIPTIONS_ID/resourceGroups/$MY_RESOURCE_GROUP_NAME/providers/Microsoft.ContainerRegistry/registries/$ACR_NAME"
 
 #get managed identity id from aks cluster
 export aks_prinipal_id="$(az identity list -g MC_${MY_RESOURCE_GROUP_NAME}_${MY_AKS_CLUSTER_NAME}_${REGION} --query [0].principalId --output tsv)"
@@ -343,7 +298,7 @@ spec:
         image: ${ACR_NAME}.azurecr.io/${DOCKER_HUB_IMAGE_NAME}
         env:
         - name: WORDPRESS_DB_HOST
-          value: ${MY_MYSQL_SERVER_NAME}.privatelink.mysql.database.azure.com
+          value: ${MY_MYSQL_SERVER_NAME}.${PRIVATE_DNS_ZONE_NAME}
         - name: WORDPRESS_DB_NAME
           value: ${MY_MYSQL_DB_NAME}
         - name: WORDPRESS_DB_USER
@@ -385,26 +340,7 @@ kubectl apply -f deployment.yaml
 
 kubectl apply -f service.yaml
 
-# Set static IP address
-export MY_STATIC_IP=$(az network public-ip create --resource-group MC_${MY_RESOURCE_GROUP_NAME}_${MY_AKS_CLUSTER_NAME}_${REGION} --location ${REGION} --name ${MY_PUBLIC_IP_NAME} --dns-name ${AKS_DNS_LABEL} --sku Standard --allocation-method static --version IPv4 --zone 1 2 3 --query publicIp.ipAddress -o tsv)
 
-# Create Ingress
-helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
-
-helm repo update
-
-helm upgrade --install --cleanup-on-fail --atomic ingress-nginx ingress-nginx/ingress-nginx \
-        --namespace ingress-nginx \
-        --create-namespace \
-        --set controller.service.annotations."service\.beta\.kubernetes\.io/azure-dns-label-name"=$AKS_DNS_LABEL \
-        --set controller.service.loadBalancerIP=$MY_STATIC_IP \
-        --set controller.service.annotations."service\.beta\.kubernetes\.io/azure-load-balancer-health-probe-request-path"=/healthz \
-        --wait --timeout 10m0s
-
-helm install quickstart ingress-nginx/ingress-nginx
-
-# Get Service Info
-kubectl get service
 
 
 
@@ -440,17 +376,409 @@ az afd origin-group create \
     --additional-latency-in-milliseconds 50
 
 
-# Create origins for each AKS
-export PRIMARY_ORIGIN_HOST_NAME=$(kubectl get service  | awk '$1=="akswordpress-service"{print $4}')
+export FRONT_DOOR_ID=$(az afd profile show --name $FRONT_DOOR_NAME --resource-group $MY_RESOURCE_GROUP_NAME | jq -r '.frontDoorId')
 
+
+# IGNORE INGRESS FOR NOW, helm issues, will probably bring back later next update
+#Set up ingress
+# Add the official stable repository
+#kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.12.0-beta.0/deploy/static/provider/cloud/deploy.yaml
+#helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+#helm repo update
+
+# Install Helm ingress-nginx
+#helm install ingress-nginx ingress-nginx/ingress-nginx \
+#    --set controller.replicaCount=2 \
+#    --set controller.nodeSelector."kubernetes\.io/os"=linux \
+#    --set defaultBackend.nodeSelector."kubernetes\.io/os"=linux \
+#    --set controller.service.externalTrafficPolicy=Local \
+#    --set controller.service.annotations."service\.beta\.kubernetes\.io/azure-dns-label-name"=$AKS_DNS_LABEL \
+#    --set controller.service.annotations."service\.beta\.kubernetes\.io/azure-load-balancer-health-probe-request-path"=/healthz \
+#    --wait --timeout 1m0s
+
+#    kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v0.44.0/deploy/static/provider/cloud/deploy.yaml
+
+
+#echo "apiVersion: networking.k8s.io/v1
+#kind: Ingress
+#metadata:
+#  name: ingress-svc
+#  annotations:
+#    kubernetes.io/ingress.class: "nginx"
+#spec:
+#  ingressClassName: nginx
+#  rules:
+#    - http:
+#        paths:
+#          - path: /
+#            pathType: Prefix
+#            backend:
+#              service:
+#                name: akswordpress-service
+#                port: 
+#                  number: 80
+#" > ingress.yaml
+
+#kubectl delete -A ValidatingWebhookConfiguration ingress-nginx-admission
+
+#kubectl apply -f ingress.yaml
+
+#export PRIMARY_ORIGIN_HOST_NAME=$(kubectl get ingress  | awk '$1=="ingress-svc"{print $4}')
+export PRIMARY_ORIGIN_HOST_NAME=$(kubectl get services  | awk '$1=="akswordpress-service"{print $4}')
+# Create origin for first AKS
 az afd origin create \
     --resource-group $MY_RESOURCE_GROUP_NAME \
     --host-name $PRIMARY_ORIGIN_HOST_NAME \
-    --origin-host-header $PRIMARY_ORIGIN_HOST_NAME \
     --profile-name $FRONT_DOOR_NAME \
     --origin-group-name $ORIGIN_GROUP_NAME \
     --origin-name $PRIMARY_ORIGIN_NAME \
     --priority 1 \
+    --weight 1000 \
+    --enabled-state Enabled \
+    --http-port 80 \
+    --https-port 443
+
+
+
+
+
+
+
+
+
+
+#####################################################################################################
+#SECONDARY STUFF
+
+#failover group
+az group create --name $SECONDARY_MY_RESOURCE_GROUP_NAME --location $REGION_2
+
+# secondary vnet
+az network vnet create \
+    --resource-group $SECONDARY_MY_RESOURCE_GROUP_NAME \
+    --location $REGION_2 \
+    --name $SECONDARY_MY_VNET_NAME \
+    --address-prefix $MY_VNET_PREFIX2
+
+export SECONDARY_AKS_NSG_NAME="Second$AKS_NSG_NAME"
+export SECONDARY_AKS_SUBNET_NAME="Second$AKS_SUBNET_NAME"
+export SECONDARY_PRIVATE_ENDPOINT_NSG_NAME="Second$PRIVATE_ENDPOINT_NSG_NAME"
+export SECONDARY_PRIVATE_ENDPOINT_SUBNET_NAME="Second$PRIVATE_ENDPOINT_SUBNET_NAME"
+
+az network nsg create --resource-group $SECONDARY_MY_RESOURCE_GROUP_NAME --name $SECONDARY_AKS_NSG_NAME --location $REGION_2
+
+az network vnet subnet create \
+  --name $SECONDARY_AKS_SUBNET_NAME \
+  --resource-group $SECONDARY_MY_RESOURCE_GROUP_NAME \
+  --vnet-name $SECONDARY_MY_VNET_NAME \
+  --address-prefixes $AKS_SUBNET_PREFIX2 \
+  --network-security-group $SECONDARY_AKS_NSG_NAME
+
+
+
+az network nsg rule create \
+  --resource-group $SECONDARY_MY_RESOURCE_GROUP_NAME \
+  --nsg-name $SECONDARY_AKS_NSG_NAME \
+  --name DenyHTTPHTTPSTrafficToAKS \
+  --priority 800 \
+  --direction Inbound \
+  --destination-port-ranges 80 443  \
+  --source-address-prefixes Internet \
+  --access Deny
+
+
+az network nsg rule create \
+  --resource-group $SECONDARY_MY_RESOURCE_GROUP_NAME \
+  --nsg-name $SECONDARY_AKS_NSG_NAME \
+  --name AllowHTTPHTTPSFromFrontDoorToAKS \
+  --priority 300 \
+  --direction Inbound \
+  --destination-port-ranges 80 443 \
+  --source-address-prefixes AzureFrontDoor.Backend \
+  --access Allow
+
+
+# Create Private Endpoint Subnet-NSG:
+az network nsg create --resource-group $SECONDARY_MY_RESOURCE_GROUP_NAME --name $SECONDARY_PRIVATE_ENDPOINT_NSG_NAME --location $REGION_2
+
+
+# Create Private Endpoint Subnet
+az network vnet subnet create \
+  --name $SECONDARY_PRIVATE_ENDPOINT_SUBNET_NAME \
+  --resource-group $SECONDARY_MY_RESOURCE_GROUP_NAME \
+  --vnet-name $SECONDARY_MY_VNET_NAME \
+  --address-prefixes $PRIVATE_ENDPOINT_SUBNET_PREFIX2 \
+  --disable-private-endpoint-network-policies true \
+  --network-security-group $SECONDARY_PRIVATE_ENDPOINT_NSG_NAME
+
+
+
+export SECONDARY_DB_KEY_VAULT="WebOpsDBKeyVault2$(($RANDOM % 10000 + 1))"
+
+#Set up keyvault
+az keyvault create -g $SECONDARY_MY_RESOURCE_GROUP_NAME --administrators $GROUP_ID -n $SECONDARY_DB_KEY_VAULT --location $REGION_2 \
+   --enable-rbac-authorization false --enable-purge-protection true
+
+#Assign admin role to group
+az role assignment create --assignee-object-id $GROUP_ID \
+  --role "Key Vault Administrator" \
+  --scope "subscriptions/$SUBSCRIPTIONS_ID/resourceGroups/$SECONDARY_MY_RESOURCE_GROUP_NAME/providers/Microsoft.KeyVault/vaults/$SECONDARY_DB_KEY_VAULT" 
+
+#Create key in keyvault
+export secondKeyIdentifier=$(az keyvault key create --name Group5DBKey -p software --vault-name $SECONDARY_DB_KEY_VAULT --query key.kid  --output tsv)
+
+# create identity and save its principalId
+export secondIdentityPrincipalId=$(az identity create -g $SECONDARY_MY_RESOURCE_GROUP_NAME --name group5_identity --location $REGION_2 --query principalId --output tsv)
+
+# add testIdentity as an access policy with key permissions 'Wrap Key', 'Unwrap Key', 'Get' and 'List' inside testVault
+az keyvault set-policy -g $SECONDARY_MY_RESOURCE_GROUP_NAME \
+  -n $SECONDARY_DB_KEY_VAULT \
+  --object-id $secondIdentityPrincipalId \
+  --key-permissions wrapKey unwrapKey get list
+
+export SECONDARY_MY_MYSQL_SERVER_NAME="mysqlwpsrvr22"
+# configure failver for mysql server
+az mysql flexible-server create \
+    --admin-password $MY_MYSQL_ADMIN_PW \
+    --admin-user $MY_MYSQL_ADMIN_USERNAME \
+    --auto-scale-iops Disabled \
+    --high-availability Disabled \
+    --iops 360 \
+    --location $REGION_2 \
+    --name $SECONDARY_MY_MYSQL_SERVER_NAME \
+    --database-name $MY_MYSQL_DB_NAME \
+    --resource-group $SECONDARY_MY_RESOURCE_GROUP_NAME \
+    --sku-name Standard_B2s \
+    --storage-auto-grow Disabled \
+    --storage-size 20 \
+    --key $secondKeyIdentifier \
+    --identity group5_identity \
+    --tier Burstable \
+    --version 8.0.21 \
+    --yes -o JSON
+
+#TEMPORARY TURN OFF FOR NOW
+az mysql flexible-server parameter set \
+  --name require_secure_transport \
+  --resource-group $SECONDARY_MY_RESOURCE_GROUP_NAME \
+  --server-name $SECONDARY_MY_MYSQL_SERVER_NAME \
+  --value OFF
+
+#create private endpoint for az mysql
+az network private-endpoint create \
+    --name DBPrivateEndpoint \
+    --resource-group $SECONDARY_MY_RESOURCE_GROUP_NAME \
+    --vnet-name $SECONDARY_MY_VNET_NAME  \
+    --subnet $SECONDARY_PRIVATE_ENDPOINT_SUBNET_NAME \
+    --private-connection-resource-id $(az resource show -g $SECONDARY_MY_RESOURCE_GROUP_NAME -n $SECONDARY_MY_MYSQL_SERVER_NAME --resource-type "Microsoft.DBforMySQL/flexibleServers" --query "id" -o tsv) \
+    --group-id mysqlServer \
+    --connection-name DBConnection \
+    --location $REGION_2 \
+    --subscription $SUBSCRIPTIONS_ID
+
+
+runtime="10 minute"; endtime=$(date -ud "$runtime" +%s); while [[ $(date -u +%s) -le $endtime ]]; do STATUS=$(az mysql flexible-server show -g $MY_RESOURCE_GROUP_NAME -n $MY_MYSQL_SERVER_NAME --query state -o tsv); echo $STATUS; if [ "$STATUS" = 'Ready' ]; then break; else sleep 10; fi; done
+
+
+export SECOND_PRIVATE_DNS_ZONE_NAME="second$PRIVATE_DNS_ZONE_NAME"
+#Configure private DNS Zone
+az network private-dns zone create --resource-group $SECONDARY_MY_RESOURCE_GROUP_NAME \
+   --name $SECOND_PRIVATE_DNS_ZONE_NAME
+
+#Link private dns to existing Vnet, make the private accessible in public internet
+az network private-dns link vnet create --resource-group $SECONDARY_MY_RESOURCE_GROUP_NAME \
+   --zone-name  $SECOND_PRIVATE_DNS_ZONE_NAME \
+   --name DBDNSLink \
+   --virtual-network $SECONDARY_MY_VNET_NAME \
+   --registration-enabled false
+
+export secondNetworkInterfaceId=$(az network private-endpoint show --name DBPrivateEndpoint --resource-group $SECONDARY_MY_RESOURCE_GROUP_NAME --query 'networkInterfaces[0].id' -o tsv)
+export second_private_ip=$(az resource show --ids $secondNetworkInterfaceId --api-version 2019-04-01 --query 'properties.ipConfigurations[0].properties.privateIPAddress' -o tsv)
+
+#add the record set as the name we set in db host
+az network private-dns record-set a create --name $SECONDARY_MYSQL_SERVER_NAME \
+    --zone-name $SECOND_PRIVATE_DNS_ZONE_NAME \
+    --resource-group $SECONDARY_MY_RESOURCE_GROUP_NAME
+#add the private ip of aks cluster and link with mysql server
+az network private-dns record-set a add-record --record-set-name $SECONDARY_MYSQL_SERVER_NAME \
+    --zone-name $SECOND_PRIVATE_DNS_ZONE_NAME \
+    -g $SECONDARY_MY_RESOURCE_GROUP_NAME \
+    -a $second_private_ip
+
+
+
+
+# AKS cluster secondary
+az aks create \
+    --resource-group $SECONDARY_MY_RESOURCE_GROUP_NAME \
+    --name $SECONDARY_MY_AKS_CLUSTER_NAME \
+    --location $REGION_2 \
+    --attach-acr $ACR_NAME \
+    --node-count 1 \
+    --min-count 1 \
+    --max-count 2 \
+    --auto-upgrade-channel stable \
+    --enable-addons monitoring \
+    --enable-addons azure-keyvault-secrets-provider \
+    --enable-cluster-autoscaler \
+    --generate-ssh-keys \
+    --enable-managed-identity \
+    --network-plugin azure \
+    --network-policy azure \
+    --vnet-subnet-id "/subscriptions/$SUBSCRIPTIONS_ID/resourceGroups/$SECONDARY_MY_RESOURCE_GROUP_NAME/providers/Microsoft.Network/virtualNetworks/$SECONDARY_MY_VNET_NAME/subnets/$SECONDARY_AKS_SUBNET_NAME"
+
+#get AKS cluster credenials
+az aks get-credentials --name $SECONDARY_MY_AKS_CLUSTER_NAME --resource-group $SECONDARY_MY_RESOURCE_GROUP_NAME
+
+
+# Create Kubernetes Secret for MySQL Credentials
+kubectl create secret generic mysql-secret \
+  --from-literal=username=$MY_MYSQL_ADMIN_USERNAME \
+  --from-literal=password=$MY_MYSQL_ADMIN_PW
+
+
+#get managed identity id from aks cluster
+export second_aks_prinipal_id="$(az identity list -g MC_${SECONDARY_MY_RESOURCE_GROUP_NAME}_${SECONDARY_MY_AKS_CLUSTER_NAME}_${REGION_2} --query [0].principalId --output tsv)"
+
+#set the key vault certificate officer to k8s cluster managed identity
+az role assignment create --assignee-object-id $second_aks_prinipal_id \
+  --role "Key Vault Certificates Officer" \
+  --scope "subscriptions/$SUBSCRIPTIONS_ID/resourceGroups/$SECONDARY_MY_RESOURCE_GROUP_NAME/providers/Microsoft.KeyVault/vaults/$SECONDARY_DB_KEY_VAULT" 
+
+#create the secret for k8s cluster
+az keyvault secret set --vault-name $SECONDARY_DB_KEY_VAULT --name AKSClusterSecret --value AKS_sample_secret
+
+
+#create the access policy for connecting keyvault and k8s managed identiity
+az keyvault set-policy -g $SECONDARY_MY_RESOURCE_GROUP_NAME \
+  -n $SECONDARY_DB_KEY_VAULT \
+  --object-id $second_aks_prinipal_id \
+  --secret-permissions backup delete get list recover restore set
+
+
+echo "apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: akswordpress-deployment2
+spec:
+  replicas: 2  
+  selector:
+    matchLabels:
+      app: akswordpress2
+  template:
+    metadata:
+      labels:
+        app: akswordpress2
+    spec:
+      containers:
+      - name: akswordpress2
+        image: ${ACR_NAME}.azurecr.io/${DOCKER_HUB_IMAGE_NAME}
+        env:
+        - name: WORDPRESS_DB_HOST
+          value: ${SECONDARY_MYSQL_SERVER_NAME}.${SECOND_PRIVATE_DNS_ZONE_NAME}
+        - name: WORDPRESS_DB_NAME
+          value: ${MY_MYSQL_DB_NAME}
+        - name: WORDPRESS_DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: username
+        - name: WORDPRESS_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: password
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "500m"
+          limits:
+            memory: "512Mi"
+            cpu: "1"
+" > deployment2.yaml
+
+echo "apiVersion: v1
+kind: Service
+metadata:
+  name: akswordpress-service2
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 80
+  selector:
+    app: akswordpress2
+" > service2.yaml
+
+# Apply the Deployment and Service in Kubernetes
+kubectl apply -f deployment2.yaml
+
+kubectl apply -f service2.yaml
+
+
+#Helm issues for some reason, so ignore ingress for now
+
+#echo "apiVersion: networking.k8s.io/v1
+#kind: Ingress
+#metadata:
+#  name: ingress-svc2
+#  annotations:
+#    kubernetes.io/ingress.class: "nginx"
+#spec:
+#  ingressClassName: nginx
+#  rules:
+#    - http:
+#        paths:
+#          - path: /
+#            pathType: Prefix
+#            backend:
+#              service:
+#                name: akswordpress-service2
+#                port: 
+#                  number: 80
+#" > ingress2.yaml
+
+#kubectl delete -A ValidatingWebhookConfiguration ingress-nginx-admission
+
+#kubectl apply -f ingress2.yaml
+
+
+# Get Service Info
+kubectl get service
+
+###################################################################
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#Back to Front door stuff now that Ingress is up
+
+
+#Secondary origin create
+#export SECONDARY_ORIGIN_HOST_NAME=$(kubectl get ingress  | awk '$1=="ingress-svc2"{print $4}')
+export SECONDARY_ORIGIN_HOST_NAME=$(kubectl get services  | awk '$1=="akswordpress-service2"{print $4}')
+az afd origin create \
+    --resource-group $MY_RESOURCE_GROUP_NAME \
+    --host-name $SECONDARY_ORIGIN_HOST_NAME \
+    --profile-name $FRONT_DOOR_NAME \
+    --origin-group-name $ORIGIN_GROUP_NAME \
+    --origin-name $SECONDARY_ORIGIN_NAME \
+    --priority 4 \
     --weight 1000 \
     --enabled-state Enabled \
     --http-port 80 \
@@ -551,3 +879,77 @@ az network front-door waf-policy rule match-condition add \
 
 # Get hostname for Front Door endpoint
 az afd endpoint show --resource-group $MY_RESOURCE_GROUP_NAME --profile-name $FRONT_DOOR_NAME --endpoint-name $FRONT_DOOR_ENDPOINT_NAME
+
+
+
+
+
+az network nsg rule create \
+  --resource-group $MY_RESOURCE_GROUP_NAME \
+  --nsg-name $AKS_NSG_NAME \
+  --name DenyHTTPHTTPSTrafficToAKS \
+  --priority 800 \
+  --direction Inbound \
+  --destination-port-ranges 80 443  \
+  --source-address-prefixes Internet \
+  --access Deny
+
+
+az network nsg rule create \
+  --resource-group $MY_RESOURCE_GROUP_NAME \
+  --nsg-name $AKS_NSG_NAME \
+  --name AllowHTTPHTTPSFromFrontDoorToAKS \
+  --priority 300 \
+  --direction Inbound \
+  --destination-port-ranges 80 443 \
+  --source-address-prefixes AzureFrontDoor.Backend \
+  --access Allow
+
+
+az network nsg rule create \
+  --resource-group $MY_RESOURCE_GROUP_NAME \
+  --nsg-name $SECONDARY_AKS_NSG_NAME \
+  --name DenyHTTPHTTPSTrafficToAKS \
+  --priority 800 \
+  --direction Inbound \
+  --destination-port-ranges 80 443  \
+  --source-address-prefixes Internet \
+  --access Deny
+
+
+az network nsg rule create \
+  --resource-group $MY_RESOURCE_GROUP_NAME \
+  --nsg-name $SECONDARY_AKS_NSG_NAME \
+  --name AllowHTTPHTTPSFromFrontDoorToAKS \
+  --priority 300 \
+  --direction Inbound \
+  --destination-port-ranges 80 443 \
+  --source-address-prefixes AzureFrontDoor.Backend \
+  --access Allow
+
+
+
+
+
+az network nsg rule create \
+  --resource-group $MY_RESOURCE_GROUP_NAME \
+  --nsg-name $PRIVATE_ENDPOINT_NSG_NAME \
+  --name AllowTrafficFromAKS \
+  --priority 300 \
+  --direction Inbound \
+  --destination-port-ranges "*"  \
+  --source-address-prefixes $AKS_SUBNET_PREFIX \
+  --access Allow
+
+
+az network nsg rule create \
+  --resource-group $MY_RESOURCE_GROUP_NAME \
+  --nsg-name $SECONDARY_PRIVATE_ENDPOINT_NSG_NAME \
+  --name AllowTrafficFromAKS \
+  --priority 300 \
+  --direction Inbound \
+  --destination-port-ranges "*"  \
+  --source-address-prefixes $AKS_SUBNET_PREFIX2 \
+  --access Allow
+
+
