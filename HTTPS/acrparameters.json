@@ -1,0 +1,38 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": {
+            "value": "canadacentral"
+        },
+        "privateEndpointName": {
+            "value": "ACRPrivateEndpoint"
+        },
+        "privateLinkResource": {
+            "value": "/subscriptions/ed521d8c-344b-475d-b770-4a79a2ebd673/resourceGroups/WebOps_Resource_Group_Usman/providers/Microsoft.ContainerRegistry/registries/webopsacrusman"
+        },
+        "targetSubResource": {
+            "value": [
+                "registry"
+            ]
+        },
+        "requestMessage": {
+            "value": ""
+        },
+        "subnet": {
+            "value": "/subscriptions/ed521d8c-344b-475d-b770-4a79a2ebd673/resourceGroups/WebOps_Resource_Group_Usman/providers/Microsoft.Network/virtualNetworks/webopsVNet/subnets/ACRSubnet"
+        },
+        "virtualNetworkId": {
+            "value": "/subscriptions/ed521d8c-344b-475d-b770-4a79a2ebd673/resourceGroups/WebOps_Resource_Group_Usman/providers/Microsoft.Network/virtualNetworks/webopsVNet"
+        },
+        "subnetDeploymentName": {
+            "value": "UpdateSubnetDeployment-20241206194315"
+        },
+        "virtualNetworkResourceGroup": {
+            "value": "WebOps_Resource_Group_Usman"
+        },
+        "privateDnsDeploymentName": {
+            "value": "PrivateDns-20241206194316"
+        }
+    }
+}
