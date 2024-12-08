@@ -1,0 +1,60 @@
+###### Varibales generated through the script the script ######
+# From Key Vault Part 02
+export KV_USER_ASSIGNED_CLIENT_ID="$(az identity show -g $MY_RESOURCE_GROUP_NAME --name $UAMI --query 'clientId' -o tsv)"
+export KV_IDENTITY_TENANT=$(az aks show --name $MY_AKS_CLUSTER_NAME --resource-group $MY_RESOURCE_GROUP_NAME --query identity.tenantId -o tsv)
+export AKS_OIDC_ISSUER="$(az aks show --resource-group $MY_RESOURCE_GROUP_NAME --name $MY_AKS_CLUSTER_NAME --query "oidcIssuerProfile.issuerUrl" -o tsv)"
+export KEYVAULT_SCOPE=$(az keyvault show --name $KEY_VAULT_NAME --query id -o tsv)
+export KV_FEDERATED_IDENTITY_NAME="aksfederatedidentity"
+export KV_SERVICE_ACCOUNT_NAME="workload-identity-sa"
+export KV_SERVICE_ACCOUNT_NAMESPACE="default"
+# From AKS
+export export MY_PUBLIC_STATIC_IP=$(az network public-ip create \
+  --resource-group "$AKSRESOURCEGROUPNAME" \
+  --location "$REGION" \
+  --name "$MY_PUBLIC_IP_NAME" \
+  --sku Standard \
+  --allocation-method Static \
+  --version IPv4 \
+  --zone 1 2 3 \
+  --query publicIp.ipAddress -o tsv)
+export MSI_ID=$(az identity create \
+  --name "$MSI_NAME" \
+  --resource-group "$MY_RESOURCE_GROUP_NAME" \
+  --location "$REGION" \
+  --query 'id' -o tsv)
+export CLIENT_ID=$(az identity show \
+  --name "$MSI_NAME" \
+  --resource-group "$MY_RESOURCE_GROUP_NAME" \
+  --query 'clientId' -o tsv)
+
+export PRINCIPAL_ID=$(az identity show --resource-group $MY_RESOURCE_GROUP_NAME --name $MSI_NAME --query 'principalId' --output tsv)
+
+
+###### Not Used so Far ######
+export REGION_2="eastus"
+export BACKUP_KEY_VAULT_NAME="WebOpsKeyVaultBackup"
+export MY_WP_ADMIN_USER="webops"
+export MY_WP_ADMIN_PW="webops_wppw"
+##### Unused So far #####
+export FQDN="$MY_DNS_LABEL.export REGION.cloudapp.azure.com"
+export MY_NAMESPACE="webops-ns13"
+export HSM_NAME="group5hsm"
+#The group name here might change based on account, we should try to be consistent with it though
+export GROUP_ID="$(az ad group show --group "WebOps" --query "id" --output tsv)"
+export MSYS_NO_PATHCONV=1
+export ORIGIN_GROUP_NAME="webopsOriginGroup"
+export PRIMARY_ORIGIN_NAME="primaryOrigin"
+export ROUTE_NAME="webOpsMainRoute"
+export WAF_NAME="frontDoorWAF"
+export FRONT_DOOR_NAME="webopsFrontDoor"
+export FRONT_DOOR_ENDPOINT_NAME="webopsFrontEnd"
+export FRONT_DOOR_SECURITY_POLICY_NAME="fd-sec-po"
+export FRONT_DOOR_RULE_SET_NAME="frontDoorRuleSet"
+
+
+# Building Image from DockerFile --> Uploading to Docker Hub
+docker build -t project8wp:v2 -f wpDockerfile .
+docker tag project8wp:v2 unaveed1122/project8wp:v3
+docker push unaveed1122/project8wp:v3
+
+

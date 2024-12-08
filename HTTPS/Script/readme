@@ -1,0 +1,75 @@
+Step 0: Make sure you are logged in with correct ID and have enough quota plus permissions.
+
+TIPS:   Update subscription ids and group names in all the json files
+        Export all variables in both bash and azureshell, as sometimes bash won't be able to connect with resources but Azure CLI works in that case. 
+        To deploy fast, step 6: mysql and step 7:aks can be run at same time on 2 different shell like bash, and azure cli. 
+        Step 06, Step 07 and step 09 takes the most time. 
+        While waiting for Step 09 which takes about 10-15 minutes for me, you can start Step 10 on other terminal. 
+        Running Private endpoints in bash will not print ip addresses but Azure Cli will does. 
+        12VMfortest is optional script, will only need to test or troubleshoot internal connectivity through endpoint. 
+
+Step 1: Run all variable by "./Script/1Variables.sh" except the ones that will be generated during script as they are dependent on those resources and need them to be ready first.
+# Change MY_RESOURCE_GROUP_NAME 
+# Change MYSQL_SERVER_NAME
+# Change ACR_NAME
+# Change KEY_VAULT_NAME
+# Change MY_DNS_ZONE_NAME
+# Change WEBSITE_NAME
+# Update email address in clustorissuer.yaml
+# Update image in deployment.yaml if using different docker image than mine
+# Update the hosts field with your new domain whichever you are using, where you see "ushipideliver.ca"
+
+Step 02: Run VNET whole script by "./Script/2VNET.sh" or run one by one to understand each Step
+# Creates VNET, then Subnets and NSG's for each subnet created with respective rules
+# We will not assign NSG's to subnet in this step but after creating private endpoints and turning public access off
+
+Step 03: Run ACR whole script by "./Script/3ACR.sh" or run one by one to understand each Step
+
+Step 04: Run KeyVault-1.sh script by "./Script/4KeyVault-1.sh"
+# Assign Role Assignment either manually through portal if it gives error through script - sometimes gives error of tenant level access something
+# Look for instructions at the end of 4KeyVault-1.sh
+
+STEP 05: Run KeyVault-2.sh script by "./Script/5KeyVault-2.sh"
+
+STEP 06: Run mysql.sh script by "./Script/6mysql.sh"
+
+Step 07: Run AKS-1.sh script by "./Script/7AKS-1.sh" - It sometimes give error while runng aks create command in bash but run smooth in Azure CLI
+
+Step 08: Run KeyVault-3.sh script by "./Script/8KeyVault-3.sh"
+
+# Before running into private endpoint, please updated paramter and template (all 6 six jason files to your variable) or download your own from portal the way I showed in last meeting
+Step 09: Run PrivateEndPoints.sh script by "./Script/9PrivateEndPoints.sh", it will run smooth in bash but will not be able to pull IP addresses unless run through azure CLI
+
+# Here, if you don't need ingress and running https with ssl certificate ignore AKS-2.sh - Like if you are doing that with Front Door
+Step 10: Run AKS-2.sh script by "./Script/AKS-2.sh" - Some Managed Identity command gives error to connect with MSI_ID --> Try Azure CLI otherwise do manually
+
+Step 11: Make Sure all varibale inside the yaml are propagating correctly
+
+echo $MYSQL_SERVER_NAME
+export KV_USER_ASSIGNED_CLIENT_ID="b5ceea67-cd2f-4685-801c-f483aee21bdc"
+echo $KV_USER_ASSIGNED_CLIENT_ID
+echo $KV_SERVICE_ACCOUNT_NAME
+echo $KV_SERVICE_ACCOUNT_NAMESPACE
+echo $KEY_VAULT_NAME
+echo $KV_IDENTITY_TENANT
+echo $ACR_NAME
+
+Step 12: Run these yamls in the sequence
+# Run below command one by one from bash terminal after making sure you are in current directory where files are present
+#############################################################################################
+# envsubst < 1storage-class.yaml | kubectl apply -f -
+# envsubst < 2persistent-volume.yaml | kubectl apply -f -
+# --> Wait for 1 Minutes to get PVC ready and bound. Check with this command "kubectl get pvc"
+# envsubst < 3upload-wp-config-pod.yaml | kubectl apply -f -
+# kubectl cp ./wp-config.php upload-wp-config-pod:/mnt/azurefile/wp-config.php
+# kubectl delete -f 3upload-wp-config-pod.yaml
+# envsubst < 4azuremysql.yaml | kubectl apply -f -
+# --> You may no need to run service account YAML if already processed in Key Vault, double check if created "kubectl get sa"
+# envsubst < 5serviceaccount.yaml | kubectl apply -f -
+# envsubst < 6secretprovider.yaml | kubectl apply -f -
+# envsubst < 7externaldns.yaml | kubectl apply -f -
+# envsubst < 8clustorissuer.yaml | kubectl apply -f -
+# envsubst < 9deployment.yaml | kubectl apply -f -
+# envsubst < 10clustor-ip-service.yaml | kubectl apply -f -
+# envsubst < 11ingresswithssl.yaml | kubectl apply -f -
+###############################################################################################
